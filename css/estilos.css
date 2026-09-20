@@ -25,6 +25,7 @@
 .exercise-list{display:grid;gap:11px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-md);padding:14px;display:grid;grid-template-columns:42px 1fr;gap:12px;align-items:start;box-shadow:0 6px 20px rgba(16,24,40,.045);transition:transform .18s var(--ease),box-shadow .18s var(--ease),border-color .18s var(--ease),opacity .18s var(--ease)}
 .card:active{transform:scale(.99)}
+.name-row{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .num{width:42px;height:42px;display:grid;place-items:center;border-radius:14px;background:var(--soft);color:var(--accent2);font-weight:900;transition:background .2s var(--ease),color .2s var(--ease)}.name{font-weight:850;line-height:1.25;font-size:16px;transition:color .2s var(--ease)}
 .meta{display:flex;gap:7px;flex-wrap:wrap;margin-top:7px}.pill{font-size:12px;color:#475467;background:#f2f4f7;padding:5px 8px;border-radius:999px;font-weight:700}.actions{display:flex;align-items:center;gap:10px;margin-top:10px}
 .weights{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
@@ -33,14 +34,14 @@
 .weight-chip strong{font-weight:900}
 .weight-add{border:1px dashed #e3b6c8;background:transparent;color:var(--accent2);font-size:12.5px;font-weight:800;padding:5px 10px;border-radius:999px;cursor:pointer;transition:background .15s var(--ease),transform .15s var(--ease)}
 .weight-add:hover{background:#fff0f5}.weight-add:active{transform:scale(.95)}
-.icon-btn{border:0;background:#111827;color:#fff;cursor:pointer;padding:10px;width:40px;height:40px;border-radius:12px;font-weight:800;line-height:1;display:inline-flex;align-items:center;justify-content:center;transition:transform .15s var(--ease),box-shadow .15s var(--ease),background .2s var(--ease)}
-.icon-btn svg{width:18px;height:18px;flex:0 0 auto}
+.icon-btn{border:0;background:#111827;color:#fff;cursor:pointer;padding:9px 14px;border-radius:12px;font-weight:800;font-size:13px;line-height:1;display:inline-flex;align-items:center;gap:7px;transition:transform .15s var(--ease),box-shadow .15s var(--ease),background .2s var(--ease)}
+.icon-btn svg{width:17px;height:17px;flex:0 0 auto}
 .icon-btn:hover{background:#1f2937}
 .icon-btn:active{transform:scale(.94)}
 .icon-btn-empty{background:#f2f4f7;color:#98a2b3;font-size:12.5px;font-weight:700;padding:10px 12px;border-radius:12px}
 .img-btn{background:var(--accent2)}.img-btn:hover{background:var(--accent)}
 .play{background:#111827}.play:hover{box-shadow:0 6px 16px rgba(17,24,39,.25)}.play:active{transform:scale(.95)}.play.instagram{background:#ad37a6}.play.disabled{background:#d0d5dd;cursor:default}
-.check{appearance:none;-webkit-appearance:none;width:24px;height:24px;border-radius:8px;border:2px solid #d0d5dd;background:#fff;cursor:pointer;display:grid;place-items:center;transition:background .18s var(--ease),border-color .18s var(--ease),transform .12s var(--ease);flex:0 0 auto}
+.check{appearance:none;-webkit-appearance:none;width:22px;height:22px;border-radius:7px;border:2px solid #d0d5dd;background:#fff;cursor:pointer;display:grid;place-items:center;transition:background .18s var(--ease),border-color .18s var(--ease),transform .12s var(--ease);flex:0 0 auto}
 .check:active{transform:scale(.9)}
 .check:checked{background:var(--ok);border-color:var(--ok)}
 .check:checked::after{content:"✓";color:#fff;font-size:15px;font-weight:900;line-height:1}
