@@ -1271,7 +1271,7 @@ function renderBuscadorWger(categorias) {
           <option value="">Todas las categorías</option>
           ${categorias.map((c) => `<option value="${c.id}">${esc(c.nombre)}</option>`).join("")}
         </select>
-        <input type="text" id="wgerTextoInput" placeholder="Buscar por nombre (en inglés)">
+        <input type="text" id="wgerTextoInput" placeholder="Buscar por nombre">
         <button type="button" class="small" id="wgerBuscarBtn">Buscar</button>
       </div>
       <div id="wgerResultados">
