@@ -43,7 +43,6 @@ const closeEditorButton = document.getElementById("closeEditor");
 const addDayButton = document.getElementById("addDay");
 const managePersonasButton = document.getElementById("managePersonas");
 const exportDataButton = document.getElementById("exportData");
-const resetDataButton = document.getElementById("resetData");
 const exerciseForm = document.getElementById("exerciseForm");
 const formTitle = document.getElementById("formTitle");
 const exerciseName = document.getElementById("exerciseName");
@@ -54,7 +53,8 @@ const cancelExercise = document.getElementById("cancelExercise");
 const buscarWgerButton = document.getElementById("buscarWgerButton");
 const wgerPreview = document.getElementById("wgerPreview");
 const wgerPreviewImg = document.getElementById("wgerPreviewImg");
-const wgerQuitarButton = document.getElementById("wgerQuitarButton");
+const wgerPlaceholderIcon = document.getElementById("wgerPlaceholderIcon");
+const wgerAccionButton = document.getElementById("wgerAccionButton");
 const closeVideoButton = document.getElementById("close");
 
 function esc(value) {
@@ -1022,6 +1022,8 @@ function renderEditor() {
 
   editorTabs.innerHTML = "";
 
+  const diaActual = rutina[selectedEditorDay];
+
   const switcher = document.createElement("div");
   switcher.className = "day-switcher";
 
@@ -1038,19 +1040,56 @@ function renderEditor() {
     }
   });
 
-  const select = document.createElement("select");
-  select.className = "day-switcher-select";
+  const selectWrap = document.createElement("div");
+  selectWrap.className = "day-switcher-select-wrap";
+
+  const trigger = document.createElement("button");
+  trigger.type = "button";
+  trigger.className = "day-switcher-select";
+  trigger.innerHTML = `
+    <span class="day-switcher-select-num">Día ${esc(diaActual.numero)}</span>
+    ${diaActual.titulo ? `<span class="day-switcher-select-title">${esc(diaActual.titulo)}</span>` : ""}
+  `;
+
+  const menu = document.createElement("div");
+  menu.className = "day-switcher-menu";
+  menu.hidden = true;
+
+  function closeMenu() {
+    menu.hidden = true;
+    document.removeEventListener("click", onDocClick);
+  }
+  function onDocClick(e) {
+    if (!selectWrap.contains(e.target)) closeMenu();
+  }
+
   rutina.forEach((day, index) => {
-    const option = document.createElement("option");
-    option.value = String(index);
-    option.textContent = `Día ${day.numero}${day.titulo ? " — " + day.titulo : ""}`;
-    select.appendChild(option);
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "day-switcher-menu-item" + (index === selectedEditorDay ? " active" : "");
+    item.innerHTML = `
+      <span class="day-switcher-menu-num">Día ${esc(day.numero)}</span>
+      ${day.titulo ? `<span class="day-switcher-menu-title">${esc(day.titulo)}</span>` : ""}
+    `;
+    item.addEventListener("click", () => {
+      closeMenu();
+      selectedEditorDay = index;
+      renderEditor();
+    });
+    menu.appendChild(item);
   });
-  select.value = String(selectedEditorDay);
-  select.addEventListener("change", () => {
-    selectedEditorDay = Number(select.value);
-    renderEditor();
+
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (menu.hidden) {
+      menu.hidden = false;
+      document.addEventListener("click", onDocClick);
+    } else {
+      closeMenu();
+    }
   });
+
+  selectWrap.append(trigger, menu);
 
   const nextButton = document.createElement("button");
   nextButton.type = "button";
@@ -1065,7 +1104,7 @@ function renderEditor() {
     }
   });
 
-  switcher.append(prevButton, select, nextButton);
+  switcher.append(prevButton, selectWrap, nextButton);
   editorTabs.appendChild(switcher);
 
   const day = rutina[selectedEditorDay];
@@ -1074,7 +1113,7 @@ function renderEditor() {
   const heading = document.createElement("div");
   heading.className = "editor-day-title";
   heading.innerHTML = `
-    <div class="editor-day-main">
+    <div class="editor-day-fields">
       <div class="day-number-edit">
         <label>Día</label>
         <input id="dayNumberInput" type="number" min="1" step="1" value="${Number(day.numero) || 1}">
@@ -1083,9 +1122,9 @@ function renderEditor() {
         <label>Nombre</label>
         <input id="dayNameInput" value="${esc(day.titulo)}">
       </div>
-      <button class="small save-day-name">💾 Guardar día</button>
+      <button class="small icon-only save-day-name" title="Guardar día" aria-label="Guardar día">💾</button>
+      <button class="small icon-only danger delete-day-button" title="Eliminar día" aria-label="Eliminar día">🗑️</button>
     </div>
-    <button class="small danger delete-day-button">🗑️ Eliminar día</button>
   `;
 
   heading.querySelector(".save-day-name").addEventListener("click", saveDaySettings);
@@ -1231,17 +1270,28 @@ function actualizarWgerPreview() {
   const imagen = exerciseForm.dataset.imageUrl || "";
   if (imagen) {
     wgerPreviewImg.src = imagen;
-    wgerPreview.hidden = false;
+    wgerPreviewImg.hidden = false;
+    wgerPlaceholderIcon.hidden = true;
+    wgerAccionButton.textContent = "Quitar imagen";
+    wgerAccionButton.classList.add("danger");
   } else {
     wgerPreviewImg.src = "";
-    wgerPreview.hidden = true;
+    wgerPreviewImg.hidden = true;
+    wgerPlaceholderIcon.hidden = false;
+    wgerAccionButton.textContent = "Cargar imagen";
+    wgerAccionButton.classList.remove("danger");
   }
 }
 
-wgerQuitarButton.addEventListener("click", () => {
-  exerciseForm.dataset.imageUrl = "";
-  exerciseForm.dataset.wgerId = "";
-  actualizarWgerPreview();
+wgerAccionButton.addEventListener("click", () => {
+  const tieneImagen = Boolean(exerciseForm.dataset.imageUrl);
+  if (tieneImagen) {
+    exerciseForm.dataset.imageUrl = "";
+    exerciseForm.dataset.wgerId = "";
+    actualizarWgerPreview();
+  } else {
+    buscarWgerButton.click();
+  }
 });
 
 buscarWgerButton.addEventListener("click", abrirBuscadorWger);
@@ -1537,13 +1587,6 @@ exportDataButton.addEventListener("click", () => {
   link.download = "mi-rutina-backup.json";
   link.click();
   URL.revokeObjectURL(url);
-});
-
-resetDataButton.addEventListener("click", () => {
-  alert(
-    "La rutina ahora está guardada en la base de datos. " +
-    "Para restaurarla usaremos el respaldo o una función de restauración del panel."
-  );
 });
 
 editorButton.addEventListener("click", openEditor);
