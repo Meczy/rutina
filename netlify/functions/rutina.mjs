@@ -225,13 +225,32 @@ export default async (request) => {
     }
 
     if (action === "wgerCategorias") {
+      // La API de wger no traduce las categorías (siempre vienen en inglés),
+      // así que las traducimos nosotros con un diccionario fijo.
+      const CATEGORIAS_ES = {
+        Abs: "Abdominales",
+        Arms: "Brazos",
+        Back: "Espalda",
+        Calves: "Pantorrillas",
+        Cardio: "Cardio",
+        Chest: "Pecho",
+        Legs: "Piernas",
+        Shoulders: "Hombros",
+      };
+
       try {
         const resp = await fetch("https://wger.de/api/v2/exercisecategory/?format=json&limit=30");
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
 
         const categorias = (data.results || [])
-          .map((c) => ({ id: Number(c.id), nombre: String(c.name || "").trim() }))
+          .map((c) => {
+            const nombreEn = String(c.name || "").trim();
+            return {
+              id: Number(c.id),
+              nombre: CATEGORIAS_ES[nombreEn] || nombreEn,
+            };
+          })
           .filter((c) => c.nombre)
           .sort((a, b) => a.nombre.localeCompare(b.nombre));
 
@@ -260,8 +279,12 @@ export default async (request) => {
 
         const ejercicios = (data.results || [])
           .map((ex) => {
+            // IDs de idioma en wger: 4 = español, 2 = inglés (antes esto pedía
+            // inglés por error). Si no hay traducción en español, caemos a
+            // inglés y, si tampoco, a cualquier traducción disponible.
             const traducciones = Array.isArray(ex.translations) ? ex.translations : [];
             const traduccion =
+              traducciones.find((t) => t.language === 4 && t.name) ||
               traducciones.find((t) => t.language === 2 && t.name) ||
               traducciones.find((t) => t.name) ||
               null;

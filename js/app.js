@@ -1,6 +1,22 @@
 const DONE_PREFIX = "mi-rutina-done-";
 const LAST_DAY_KEY = "mi-rutina-ultimo-dia";
 
+// Íconos como SVG en línea (en vez de emojis) para los botones de
+// imagen/video en cada tarjeta de ejercicio.
+const ICON_IMAGE = `
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="4"></rect>
+    <circle cx="8.5" cy="9.5" r="1.75" fill="currentColor" stroke="none"></circle>
+    <path d="M21 15.5l-5.5-5.5a2 2 0 0 0-2.8 0L4 19"></path>
+  </svg>
+`;
+
+const ICON_PLAY = `
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+    <path d="M8 5.14v13.72c0 .86.94 1.4 1.68.96l11.18-6.86a1.12 1.12 0 0 0 0-1.92L9.68 4.18C8.94 3.73 8 4.27 8 5.14z"></path>
+  </svg>
+`;
+
 let rutina = [];
 let adminPassword = "";
 let selectedEditorDay = 0;
@@ -763,12 +779,12 @@ function render() {
           <div class="actions">
             ${
               exercise.imageUrl
-                ? `<button type="button" class="icon-btn img-btn" title="Ver imagen">🖼️</button>`
+                ? `<button type="button" class="icon-btn img-btn" title="Ver imagen">${ICON_IMAGE}</button>`
                 : ""
             }
             ${
               exercise.url
-                ? `<button type="button" class="icon-btn play ${platform}" title="Ver video">▶️</button>`
+                ? `<button type="button" class="icon-btn play ${platform}" title="Ver video">${ICON_PLAY}</button>`
                 : ""
             }
             ${
