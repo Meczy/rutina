@@ -771,7 +771,10 @@ function render() {
       card.innerHTML = `
         <div class="num">${exerciseIndex + 1}</div>
         <div>
-          <div class="name">${esc(exercise.name)}</div>
+          <div class="name-row">
+            <div class="name">${esc(exercise.name)}</div>
+            <input class="check" type="checkbox" ${completed ? "checked" : ""}>
+          </div>
           <div class="meta">
             ${exercise.series ? `<span class="pill">${esc(exercise.series)} series</span>` : ""}
             ${exercise.reps ? `<span class="pill">${esc(exercise.reps)} reps</span>` : ""}
@@ -779,12 +782,12 @@ function render() {
           <div class="actions">
             ${
               exercise.imageUrl
-                ? `<button type="button" class="icon-btn img-btn" title="Ver imagen">${ICON_IMAGE}</button>`
+                ? `<button type="button" class="icon-btn img-btn" title="Ver imagen">${ICON_IMAGE}<span>Imagen</span></button>`
                 : ""
             }
             ${
               exercise.url
-                ? `<button type="button" class="icon-btn play ${platform}" title="Ver video">${ICON_PLAY}</button>`
+                ? `<button type="button" class="icon-btn play ${platform}" title="Ver video">${ICON_PLAY}<span>Video</span></button>`
                 : ""
             }
             ${
@@ -792,7 +795,6 @@ function render() {
                 ? `<span class="icon-btn icon-btn-empty">Sin contenido</span>`
                 : ""
             }
-            <input class="check" type="checkbox" ${completed ? "checked" : ""}>
           </div>
           <div class="weights">
             ${pesosHtml}
