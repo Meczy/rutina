@@ -67,6 +67,10 @@ function esc(value) {
   }[m]));
 }
 
+function icon(nombre, clase = "") {
+  return `<svg class="icon ${clase}" aria-hidden="true"><use href="/icons/sprite.svg#${nombre}"></use></svg>`;
+}
+
 function youtubeEmbed(url) {
   const match = (url || "").match(
     /(?:youtube\.com\/(?:shorts\/|watch\?v=)|youtu\.be\/)([A-Za-z0-9_-]{6,})/
@@ -132,7 +136,7 @@ function asegurarPersona() {
 function actualizarPersonaButton() {
   if (!personaButton) return;
   const persona = obtenerPersona();
-  personaButton.textContent = persona ? `👤 ${persona}` : "👤 Elegir";
+  personaButton.innerHTML = persona ? `${icon("user")} ${esc(persona)}` : `${icon("user")} Elegir`;
 }
 
 async function abrirSelectorPersona() {
@@ -164,7 +168,7 @@ function renderSelectorPersona(personas) {
     .map(
       (p) => `
         <button type="button" class="persona-option${p.persona === actual ? " active" : ""}" data-persona="${esc(p.persona)}">
-          🏋️ ${esc(p.persona)}
+          ${icon("dumbbell")} ${esc(p.persona)}
         </button>
       `
     )
@@ -305,8 +309,8 @@ function renderHistorialPeso(exercise, persona, historial) {
             ${signo ? `<span class="history-diff${signoClase}">${signo}</span>` : ""}
           </div>
           <div class="history-actions">
-            <button type="button" class="small history-edit">✏️ Editar</button>
-            <button type="button" class="small danger history-delete">🗑 Eliminar</button>
+            <button type="button" class="small history-edit">${icon("pencil")} Editar</button>
+            <button type="button" class="small danger history-delete">${icon("trash-2")} Eliminar</button>
           </div>
         </div>
       `;
@@ -418,7 +422,7 @@ async function renderInfoTab() {
 
   infoSection.innerHTML = `
     <div class="day-head">
-      <h2>📊 Mi progreso</h2>
+      <h2>${icon("chart-column")} Mi progreso</h2>
     </div>
     <div class="metrica-card">
       <div class="metrica-card-head">
@@ -430,7 +434,7 @@ async function renderInfoTab() {
         <div class="field"><label>Peso corporal (kg)</label><input type="number" step="0.1" min="0" id="metricaPeso" required></div>
         <div class="field"><label>Grasa corporal % (opcional)</label><input type="number" step="0.1" min="0" max="100" id="metricaGrasa"></div>
         <div class="field"><label>Agua % (opcional)</label><input type="number" step="0.1" min="0" max="100" id="metricaAgua"></div>
-        <button type="submit" class="main-btn">💾 Guardar registro del día</button>
+        <button type="submit" class="main-btn">${icon("save")} Guardar registro del día</button>
       </form>
     </div>
     <div id="metricaHistorial"><p class="footer-note">Cargando historial…</p></div>
@@ -611,8 +615,8 @@ function renderHistorialMetricas(persona, historial) {
             ${extras.length ? `<span class="history-diff">${esc(extras.join(" · "))}</span>` : ""}
           </div>
           <div class="history-actions">
-            <button type="button" class="small metrica-edit">✏️ Editar</button>
-            <button type="button" class="small danger metrica-delete">🗑 Eliminar</button>
+            <button type="button" class="small metrica-edit">${icon("pencil")} Editar</button>
+            <button type="button" class="small danger metrica-delete">${icon("trash-2")} Eliminar</button>
           </div>
         </div>
       `;
@@ -762,7 +766,7 @@ function render() {
         .map(
           (p) => `
             <button type="button" class="weight-chip" data-persona="${esc(p.persona)}">
-              🏋️ ${esc(p.persona)} <strong>${formatPeso(p.peso)}kg</strong>
+              ${icon("dumbbell")} ${esc(p.persona)} <strong>${formatPeso(p.peso)}kg</strong>
             </button>
           `
         )
@@ -970,7 +974,7 @@ function renderPersonas(personas) {
             <span class="history-fecha">${p.registros} peso${p.registros === 1 ? "" : "s"} registrado${p.registros === 1 ? "" : "s"}</span>
           </div>
           <div class="history-actions">
-            <button type="button" class="small danger persona-delete">🗑 Eliminar persona</button>
+            <button type="button" class="small danger persona-delete">${icon("trash-2")} Eliminar persona</button>
           </div>
         </div>
       `
@@ -1122,8 +1126,10 @@ function renderEditor() {
         <label>Nombre</label>
         <input id="dayNameInput" value="${esc(day.titulo)}">
       </div>
-      <button class="small icon-only save-day-name" title="Guardar día" aria-label="Guardar día">💾</button>
-      <button class="small icon-only danger delete-day-button" title="Eliminar día" aria-label="Eliminar día">🗑️</button>
+      <div class="day-actions">
+        <button class="small icon-only save-day-name" title="Guardar día" aria-label="Guardar día">${icon("save")}<span class="btn-label"></span></button>
+        <button class="small icon-only danger delete-day-button" title="Eliminar día" aria-label="Eliminar día">${icon("trash-2")}<span class="btn-label"></span></button>
+      </div>
     </div>
   `;
 
@@ -1136,11 +1142,10 @@ function renderEditor() {
 
   day.ejercicios.forEach((exercise, index) => {
     const row = document.createElement("div");
-    row.className = "edit-row draggable-exercise";
+    row.className = "edit-row";
     row.dataset.exerciseId = String(exercise.id);
 
     row.innerHTML = `
-      <div class="drag-handle" title="Arrastrar para cambiar el orden">⋮⋮</div>
       <div class="edit-row-info">
         <strong>${esc(exercise.name)}</strong>
         <div class="edit-meta">
@@ -1148,10 +1153,10 @@ function renderEditor() {
         </div>
       </div>
       <div class="edit-actions">
-        <button class="small move-up">↑</button>
-        <button class="small move-down">↓</button>
-        <button class="small edit-button">✏️ Editar</button>
-        <button class="small danger delete-button">🗑️</button>
+        <button class="small move-up" aria-label="Mover arriba">${icon("chevron-up")}</button>
+        <button class="small move-down" aria-label="Mover abajo">${icon("chevron-down")}</button>
+        <button class="small edit-button">${icon("pencil")} </button>
+        <button class="small danger delete-button" aria-label="Eliminar">${icon("trash-2")}</button>
       </div>
     `;
 
@@ -1160,7 +1165,6 @@ function renderEditor() {
     row.querySelector(".edit-button").addEventListener("click", () => editExercise(exercise));
     row.querySelector(".delete-button").addEventListener("click", () => deleteExercise(exercise));
 
-    configureDrag(row, exerciseList);
     exerciseList.appendChild(row);
   });
 
@@ -1270,14 +1274,14 @@ function actualizarWgerPreview() {
   const imagen = exerciseForm.dataset.imageUrl || "";
   if (imagen) {
     wgerPreviewImg.src = imagen;
-    wgerPreviewImg.hidden = false;
-    wgerPlaceholderIcon.hidden = true;
+    wgerPreviewImg.removeAttribute("hidden");
+    wgerPlaceholderIcon.setAttribute("hidden", "");
     wgerAccionButton.textContent = "Quitar imagen";
     wgerAccionButton.classList.add("danger");
   } else {
     wgerPreviewImg.src = "";
-    wgerPreviewImg.hidden = true;
-    wgerPlaceholderIcon.hidden = false;
+    wgerPreviewImg.setAttribute("hidden", "");
+    wgerPlaceholderIcon.removeAttribute("hidden");
     wgerAccionButton.textContent = "Cargar imagen";
     wgerAccionButton.classList.remove("danger");
   }
@@ -1392,9 +1396,7 @@ function renderResultadosWger(ejercicios) {
     card.addEventListener("click", () => {
       exerciseForm.dataset.wgerId = card.dataset.wgerId;
       exerciseForm.dataset.imageUrl = card.dataset.imagen;
-      if (!exerciseName.value.trim()) {
-        exerciseName.value = card.dataset.nombre;
-      }
+      exerciseName.value = card.dataset.nombre;
       actualizarWgerPreview();
       closeVideo();
     });
@@ -1409,6 +1411,7 @@ cancelExercise.addEventListener("click", () => {
   exerciseForm.classList.remove("open");
   exerciseForm.dataset.imageUrl = "";
   exerciseForm.dataset.wgerId = "";
+  actualizarWgerPreview();
 });
 
 exerciseForm.addEventListener("submit", async (event) => {
@@ -1455,6 +1458,7 @@ exerciseForm.addEventListener("submit", async (event) => {
     exerciseForm.dataset.exerciseId = "";
     exerciseForm.dataset.imageUrl = "";
     exerciseForm.dataset.wgerId = "";
+    actualizarWgerPreview();
     await cargarRutina();
     renderEditor();
   } catch (error) {
@@ -1496,84 +1500,6 @@ async function moveExercise(index, delta) {
   }
 }
 
-function configureDrag(row, exerciseList) {
-  const handle = row.querySelector(".drag-handle");
-  if (!handle) return;
-
-  let dragging = false;
-  let pointerId = null;
-
-  const onPointerMove = (event) => {
-    if (!dragging || event.pointerId !== pointerId) return;
-    event.preventDefault();
-
-    const y = event.clientY;
-    const siblings = [...exerciseList.querySelectorAll(".draggable-exercise")];
-
-    for (const sibling of siblings) {
-      if (sibling === row) continue;
-      const rect = sibling.getBoundingClientRect();
-      const before = y < rect.top + rect.height / 2;
-
-      if (before && sibling.previousElementSibling !== row) {
-        exerciseList.insertBefore(row, sibling);
-        break;
-      }
-      if (!before && sibling.nextElementSibling !== row) {
-        exerciseList.insertBefore(row, sibling.nextSibling);
-        break;
-      }
-    }
-  };
-
-  const finishDrag = async (event) => {
-    if (!dragging) return;
-    dragging = false;
-    row.classList.remove("dragging");
-
-    try {
-      handle.releasePointerCapture(pointerId);
-    } catch (error) {
-      /* noop */
-    }
-
-    handle.removeEventListener("pointermove", onPointerMove);
-    handle.removeEventListener("pointerup", finishDrag);
-    handle.removeEventListener("pointercancel", finishDrag);
-
-    const day = rutina[selectedEditorDay];
-    const ids = [
-      ...exerciseList.querySelectorAll(".draggable-exercise")
-    ].map((item) => Number(item.dataset.exerciseId));
-
-    try {
-      await api("reorderExercises", { dia_id: day.id, ids });
-      await cargarRutina();
-      renderEditor();
-    } catch (error) {
-      alert(error.message);
-      await cargarRutina();
-      renderEditor();
-    }
-  };
-
-  handle.addEventListener("pointerdown", (event) => {
-    event.preventDefault();
-    dragging = true;
-    pointerId = event.pointerId;
-    row.classList.add("dragging");
-
-    try {
-      handle.setPointerCapture(pointerId);
-    } catch (error) {
-      /* noop */
-    }
-
-    handle.addEventListener("pointermove", onPointerMove);
-    handle.addEventListener("pointerup", finishDrag);
-    handle.addEventListener("pointercancel", finishDrag);
-  });
-}
 
 exportDataButton.addEventListener("click", () => {
   const blob = new Blob(

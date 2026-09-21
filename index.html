@@ -5,7 +5,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
     <meta name="theme-color" content="#0b1020">
-    <title>Mi Rutina 💪</title>
+    <title>Mi Rutina</title>
+    <link rel="preload" href="icons/sprite.svg" as="image" type="image/svg+xml">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icons/icon-192.png">
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -22,18 +23,18 @@
             <div
                 style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;position:relative;z-index:1">
                 <div>
-                    <h1>Mi Rutina-DEV 💪</h1>
+                    <h1><svg class="icon icon-lg" aria-hidden="true"><use href="icons/sprite.svg#dumbbell"></use></svg> Mi Rutina-DEV</h1>
                     <p>Tu entrenamiento en un solo lugar.</p>
                 </div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;position:relative;z-index:1">
-                    <button class="persona-btn" id="personaButton">👤</button>
+                    <button class="persona-btn" id="personaButton" aria-label="Elegir persona"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#user"></use></svg></button>
                     <button class="persona-btn"
-                        id="progresoButton">📊 Progreso</button>
-                        <button class="main-btn" id="editorButton">✏️
+                        id="progresoButton"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#chart-column"></use></svg> Progreso</button>
+                        <button class="main-btn" id="editorButton"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#pencil"></use></svg>
                         Rutina</button>
                 </div>
             </div>
-            <button class="install-btn" id="installButton" hidden>📲 Instalar app</button>
+            <button class="install-btn" id="installButton" hidden><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#download"></use></svg> Instalar app</button>
             <div class="stats">
                 <div class="stat"><strong id="totalDays">0</strong>Días</div>
                 <div class="stat"><strong id="totalExercises">0</strong>Ejercicios</div>
@@ -50,7 +51,7 @@
     <div class="modal" id="modal">
         <div class="modal-card">
             <div class="modal-top">
-                <div class="modal-title" id="modalTitle">Video</div><button class="close" id="close">✕</button>
+                <div class="modal-title" id="modalTitle">Video</div><button class="close" id="close" aria-label="Cerrar"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#x"></use></svg></button>
             </div>
             <div id="modalBody"></div>
         </div>
@@ -58,12 +59,12 @@
     <div class="editor" id="editor">
         <div class="editor-panel">
             <div class="editor-head">
-                <h2>Editar rutina</h2><button class="small" id="closeEditor">✕ Cerrar</button>
+                <h2>Editar rutina</h2><button class="small" id="closeEditor"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#x"></use></svg> Cerrar</button>
             </div>
             <div class="toolbar">
-                <button class="main-btn" id="addDay">＋ Nuevo día</button><button class="small" id="managePersonas">🧑
+                <button class="main-btn" id="addDay"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#plus"></use></svg> Nuevo día</button><button class="small" id="managePersonas"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#users"></use></svg>
                     Personas</button>
-                <button class="small" id="exportData">💾 Exportar respaldo</button>
+                <button class="small" id="exportData"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#save"></use></svg> Exportar respaldo</button>
             </div>
             <p style="color:#667085">Selecciona un día, cambia su número y nombre, y arrastra los ejercicios para
                 cambiar el orden.</p>
@@ -73,7 +74,7 @@
     </div>
     <div class="form-overlay" id="exerciseForm">
         <div class="form-card">
-            <h3 id="formTitle">Agregar ejercicio</h3><button type="button" class="small" id="buscarWgerButton">🔎 Buscar
+            <h3 id="formTitle">Agregar ejercicio</h3><button type="button" class="small" id="buscarWgerButton"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#search"></use></svg> Buscar
                 en librería de ejercicios (wger)</button>
             <div class="wger-preview" id="wgerPreview">
                 <div class="wger-thumb" id="wgerThumb"><img id="wgerPreviewImg" alt="Imagen del ejercicio" hidden><svg

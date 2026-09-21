@@ -6,6 +6,7 @@
     "pg": "^8.23.0"
   },
   "devDependencies": {
-    "drizzle-kit": "^1.0.0-beta.22"
+    "drizzle-kit": "^1.0.0-beta.22",
+    "lucide-static": "^1.47.0"
   }
 }
