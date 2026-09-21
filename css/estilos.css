@@ -82,6 +82,7 @@
 .wger-preview{display:flex;align-items:center;gap:10px;background:#f7f2f4;border:1px solid var(--line);border-radius:14px;padding:8px;margin:10px 0}
 .wger-preview img{width:56px;height:56px;object-fit:cover;border-radius:10px;background:#fff}
 .wger-thumb{width:56px;height:56px;border-radius:10px;background:#fff;border:1px dashed #d0d5dd;display:grid;place-items:center;flex:0 0 auto;color:#98a2b3}
+svg[hidden]{display:none}
 .wger-preview .small{margin-left:auto}
 
 .wger-buscador{padding:16px;background:#fff}
@@ -104,7 +105,7 @@
 .edit-row{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:11px 0;border-top:1px solid #eef0f3}.edit-meta{color:var(--muted);font-size:12px;margin-top:3px}.edit-actions{display:flex;gap:7px;flex-wrap:wrap}.add-btn{width:100%;background:var(--soft);color:var(--accent2);margin-top:9px}
 .form-overlay{position:fixed;inset:0;background:rgba(2,6,23,.45);display:none;align-items:center;justify-content:center;padding:16px;z-index:140}.form-overlay.open{display:flex}.form-card{width:min(520px,100%);background:#fff;border-radius:22px;padding:20px}
 .form-card h3{margin-top:0}.field{margin:11px 0}.field label{display:block;font-weight:800;font-size:13px;margin-bottom:6px}.field input{width:100%;padding:11px 12px;border:1px solid #d0d5dd;border-radius:12px;font:inherit}.form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
-@media(max-width:720px){.card{grid-template-columns:38px 1fr}.num{width:38px;height:38px}.actions{justify-content:space-between}.day-head{align-items:start;flex-direction:column}.edit-row{align-items:flex-start;flex-direction:column}.edit-actions{width:100%}.form-overlay{padding:0}.form-card{width:100%;height:100%;max-width:none;max-height:none;border-radius:0;overflow-y:auto;display:flex;flex-direction:column}.form-card .form-actions{margin-top:auto;padding-top:16px}}
+@media(max-width:720px){.card{grid-template-columns:38px 1fr}.num{width:38px;height:38px}.actions{justify-content:flex-start}.day-head{align-items:start;flex-direction:column}.edit-row{align-items:flex-start;flex-direction:column}.edit-actions{width:100%}.form-overlay{padding:0}.form-card{width:100%;height:100%;max-width:none;max-height:none;border-radius:0;overflow-y:auto;display:flex;flex-direction:column}.form-card .form-actions{margin-top:auto;padding-top:16px}.editor{padding:0}.editor-panel{max-width:none;width:100%;min-height:100vh;border-radius:0}}
 
 .editor-tabs{margin-bottom:14px}
 .day-switcher{
@@ -200,16 +201,39 @@
 
 .day-number-edit input:focus,.day-name-edit input:focus{outline:2px solid rgba(214,51,108,.18);border-color:var(--accent)}
 
-.editor-day-fields .icon-only{flex:0 0 auto;width:38px;height:38px;padding:0;display:grid;place-items:center;font-size:16px}
+.editor-day-fields .icon-only{flex:0 0 auto;width:38px;height:38px;padding:0;display:flow;place-items:center;font-size:16px}
+
+.day-actions{flex:0 0 auto;display:flex;gap:8px}
+.btn-label{display:none}
 
 @media(max-width:700px){
-  .day-number-edit{width:52px}
+  .editor-day-fields{flex-direction:column;align-items:stretch}
+  .day-number-edit{width:100%}
+  .day-number-edit input{text-align:left}
+  .day-actions{width:100%}
+  .editor-day-fields .icon-only{width:auto;height:44px;flex:1;display:flow;align-items:center;justify-content:center;gap:6px;font-weight:800}
+  .btn-label{display:inline}
 }
+
 .editor-exercise-list{display:grid;gap:0}
-.draggable-exercise{position:relative;background:#fff;transition:box-shadow .15s var(--ease),transform .15s var(--ease)}
-.drag-handle{flex:0 0 auto;color:#98a2b3;font-size:24px;letter-spacing:-5px;user-select:none;padding:8px 6px;touch-action:none;cursor:grab;border-radius:8px}
-.drag-handle:active{cursor:grabbing;color:var(--accent);background:var(--soft)}
 .edit-row-info{flex:1;min-width:0}
-.draggable-exercise.dragging{box-shadow:0 12px 26px rgba(16,24,40,.16);transform:scale(1.01);z-index:5;border-radius:14px;background:#fff}
 .move-up,.move-down{min-width:36px;padding-left:8px;padding-right:8px}
 @media(max-width:700px){.edit-actions{width:100%}.edit-actions .small{flex:1}}
+/* Iconos SVG (reemplazo de emojis) */
+.icon{
+  width: 1em;
+  height: 1em;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vertical-align: -0.125em;
+}
+.icon-lg{ width: 1.25em; height: 1.25em; }
+button{
+  display: inline-flex;
+  align-items: center;
+  gap: .45em;
+}

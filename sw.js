@@ -1,10 +1,11 @@
-const CACHE_NAME = "mi-rutina-shell-v1";
+const CACHE_NAME = "mi-rutina-shell-v2";
 
 const APP_SHELL = [
   "/",
   "/index.html",
   "/css/estilos.css",
   "/js/app.js",
+  "/icons/sprite.svg",
   "/manifest.json",
   "/icons/icon-192.png",
   "/icons/icon-512.png"
