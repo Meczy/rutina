@@ -6,6 +6,9 @@ import rutina from "./rutina-api-node.mjs";
 
 const PORT = process.env.PORT || 3000;
 
+// Solo lo que esté dentro de ./public se sirve al navegador.
+const PUBLIC_DIR = path.resolve(import.meta.dirname, "public");
+
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
@@ -21,7 +24,7 @@ const mimeTypes = {
 
 const server = http.createServer(async (req, res) => {
   try {
-    if (req.url === "/api/rutina") {
+    if (req.url === "/api/rutina" || req.url.startsWith("/api/rutina?")) {
       let body = "";
 
       req.on("data", (chunk) => {
@@ -42,13 +45,18 @@ const server = http.createServer(async (req, res) => {
           const response = await rutina(request);
           const responseBody = await response.text();
 
-          res.writeHead(response.status, {
+          const headers = {
             "Content-Type":
               response.headers.get("content-type") ||
               "application/json; charset=utf-8",
             "Cache-Control":
               response.headers.get("cache-control") || "no-store",
-          });
+          };
+
+          const setCookie = response.headers.get("set-cookie");
+          if (setCookie) headers["Set-Cookie"] = setCookie;
+
+          res.writeHead(response.status, headers);
 
           res.end(responseBody);
         } catch (error) {
@@ -70,15 +78,40 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    let requestedPath = req.url.split("?")[0];
+    // ---------- Archivos estáticos: SOLO desde ./public ----------
+    let requestedPath;
+    try {
+      requestedPath = decodeURIComponent(req.url.split("?")[0]);
+    } catch {
+      res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("Bad request");
+      return;
+    }
+
+    if (requestedPath.includes("\0")) {
+      res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("Bad request");
+      return;
+    }
 
     if (requestedPath === "/") {
       requestedPath = "/index.html";
     }
 
-    const filePath = path.join(process.cwd(), requestedPath);
+    // Resolvemos contra PUBLIC_DIR y verificamos que el resultado siga dentro
+    // (evita ../ y variantes). Además bloqueamos cualquier archivo/carpeta oculto.
+    const filePath = path.resolve(PUBLIC_DIR, "." + requestedPath);
+    const dentroDePublic = filePath.startsWith(PUBLIC_DIR + path.sep);
+    const esOculto = requestedPath
+      .split("/")
+      .some((segmento) => segmento.startsWith("."));
 
-    if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+    if (
+      !dentroDePublic ||
+      esOculto ||
+      !fs.existsSync(filePath) ||
+      !fs.statSync(filePath).isFile()
+    ) {
       res.writeHead(404, {
         "Content-Type": "text/plain; charset=utf-8",
       });
@@ -91,6 +124,7 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, {
       "Content-Type":
         mimeTypes[ext] || "application/octet-stream",
+      "X-Content-Type-Options": "nosniff",
     });
 
     fs.createReadStream(filePath).pipe(res);
