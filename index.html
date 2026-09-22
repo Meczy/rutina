@@ -15,10 +15,39 @@
     <meta name="apple-mobile-web-app-title" content="Mi Rutina">
     <meta name="mobile-web-app-capable" content="yes">
     <link rel="stylesheet" href="css/estilos.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 
 <body>
-    <div class="app">
+    <div class="auth-screen" id="authScreen" hidden>
+        <div class="auth-card">
+            <h1><svg class="icon icon-lg" aria-hidden="true"><use href="icons/sprite.svg#dumbbell"></use></svg> Mi Rutina</h1>
+            <p class="auth-subtitle">Iniciá sesión para ver tu rutina.</p>
+
+            <div id="googleButtonContainer" class="google-button-container"></div>
+            <div class="auth-divider"><span>o con tu correo</span></div>
+
+            <form id="authForm">
+                <div class="field" id="authNombreField" hidden>
+                    <label>Nombre</label>
+                    <input type="text" id="authNombre" autocomplete="name">
+                </div>
+                <div class="field">
+                    <label>Correo</label>
+                    <input type="email" id="authEmail" required autocomplete="email">
+                </div>
+                <div class="field">
+                    <label>Contraseña</label>
+                    <input type="password" id="authPassword" required autocomplete="current-password" minlength="6">
+                </div>
+                <p class="auth-error" id="authError" hidden></p>
+                <button type="submit" class="main-btn" id="authSubmit">Iniciar sesión</button>
+            </form>
+
+            <button type="button" class="auth-switch" id="authSwitch">¿No tenés cuenta? Registrate</button>
+        </div>
+    </div>
+    <div class="app" id="appRoot" hidden>
         <header class="hero">
             <div
                 style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;position:relative;z-index:1">
@@ -27,7 +56,7 @@
                     <p>Tu entrenamiento en un solo lugar.</p>
                 </div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;position:relative;z-index:1">
-                    <button class="persona-btn" id="personaButton" aria-label="Elegir persona"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#user"></use></svg></button>
+                    <button class="persona-btn" id="personaButton" aria-label="Cuenta"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#user"></use></svg></button>
                     <button class="persona-btn"
                         id="progresoButton"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#chart-column"></use></svg> Progreso</button>
                         <button class="main-btn" id="editorButton"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#pencil"></use></svg>
@@ -62,8 +91,7 @@
                 <h2>Editar rutina</h2><button class="small" id="closeEditor"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#x"></use></svg> Cerrar</button>
             </div>
             <div class="toolbar">
-                <button class="main-btn" id="addDay"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#plus"></use></svg> Nuevo día</button><button class="small" id="managePersonas"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#users"></use></svg>
-                    Personas</button>
+                <button class="main-btn" id="addDay"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#plus"></use></svg> Nuevo día</button>
                 <button class="small" id="exportData"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#save"></use></svg> Exportar respaldo</button>
             </div>
             <p style="color:#667085">Selecciona un día, cambia su número y nombre, y arrastra los ejercicios para

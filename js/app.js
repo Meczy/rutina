@@ -18,7 +18,6 @@ const ICON_PLAY = `
 `;
 
 let rutina = [];
-let adminPassword = "";
 let selectedEditorDay = 0;
 let currentDayIndex = 0;
 let vista = "dias";
@@ -41,7 +40,6 @@ const personaButton = document.getElementById("personaButton");
 const progresoButton = document.getElementById("progresoButton");
 const closeEditorButton = document.getElementById("closeEditor");
 const addDayButton = document.getElementById("addDay");
-const managePersonasButton = document.getElementById("managePersonas");
 const exportDataButton = document.getElementById("exportData");
 const exerciseForm = document.getElementById("exerciseForm");
 const formTitle = document.getElementById("formTitle");
@@ -113,102 +111,44 @@ function limpiarChecksAntiguos() {
   aBorrar.forEach((key) => localStorage.removeItem(key));
 }
 
-const PERSONA_KEY = "rutina_persona";
+// --- Usuario logueado (reemplaza al viejo nombre de "persona" libre) ---
 
-function obtenerPersona() {
-  return localStorage.getItem(PERSONA_KEY) || "";
+let usuarioActual = null;
+
+function nombreUsuario() {
+  return usuarioActual ? usuarioActual.nombre : "";
 }
 
-function pedirPersona() {
-  const actual = obtenerPersona();
-  const nombre = prompt("¿Cómo te llamás? Así identificamos de quién es cada peso.", actual);
-  if (nombre && nombre.trim()) {
-    localStorage.setItem(PERSONA_KEY, nombre.trim());
-    return nombre.trim();
-  }
-  return actual;
-}
-
-function asegurarPersona() {
-  return obtenerPersona() || pedirPersona();
+function esMiPersona(persona) {
+  return usuarioActual && persona === usuarioActual.nombre;
 }
 
 function actualizarPersonaButton() {
   if (!personaButton) return;
-  const persona = obtenerPersona();
-  personaButton.innerHTML = persona ? `${icon("user")} ${esc(persona)}` : `${icon("user")} Elegir`;
+  personaButton.innerHTML = usuarioActual
+    ? `${icon("user")} ${esc(usuarioActual.nombre)}`
+    : `${icon("user")}`;
 }
 
-async function abrirSelectorPersona() {
-  let personas = [];
-
+async function cerrarSesion() {
+  if (!confirm("¿Cerrar sesión?")) return;
   try {
-    const response = await fetch("/api/rutina", {
+    await fetch("/api/rutina", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "listPersonas" })
+      body: JSON.stringify({ action: "logout" })
     });
-    const result = await response.json().catch(() => ({}));
-    if (response.ok && result.ok) personas = result.personas || [];
   } catch (error) {
-    /* si falla la lista, igual se puede escribir un nombre nuevo */
+    /* si falla la llamada igual mostramos la pantalla de login */
   }
-
-  renderSelectorPersona(personas);
-  modal.classList.add("open");
-}
-
-function renderSelectorPersona(personas) {
-  modalTitle.textContent = "¿Quién sos?";
-  modal.querySelector(".modal-card").classList.remove("vertical");
-
-  const actual = obtenerPersona();
-
-  const opciones = personas
-    .map(
-      (p) => `
-        <button type="button" class="persona-option${p.persona === actual ? " active" : ""}" data-persona="${esc(p.persona)}">
-          ${icon("dumbbell")} ${esc(p.persona)}
-        </button>
-      `
-    )
-    .join("");
-
-  modalBody.innerHTML = `
-    <div class="persona-selector">
-      ${opciones || `<p class="footer-note">Todavía no hay personas registradas.</p>`}
-      <div class="persona-new">
-        <input type="text" id="personaNuevoNombre" placeholder="Escribir un nombre nuevo">
-        <button type="button" class="main-btn" id="personaNuevoGuardar">Usar</button>
-      </div>
-    </div>
-  `;
-
-  modalBody.querySelectorAll(".persona-option").forEach((btn) => {
-    btn.addEventListener("click", () => seleccionarPersona(btn.dataset.persona));
-  });
-
-  document.getElementById("personaNuevoGuardar").addEventListener("click", () => {
-    const nombre = document.getElementById("personaNuevoNombre").value.trim();
-    if (!nombre) {
-      alert("Escribí un nombre.");
-      return;
-    }
-    seleccionarPersona(nombre);
-  });
-}
-
-function seleccionarPersona(nombre) {
-  localStorage.setItem(PERSONA_KEY, nombre);
-  actualizarPersonaButton();
-  closeVideo();
-  render();
-  if (vista === "info") renderInfoTab();
+  usuarioActual = null;
+  rutina = [];
+  mostrarPantallaLogin();
 }
 
 async function registrarPeso(exercise) {
-  const persona = asegurarPersona();
-  if (!persona) return;
+  if (!usuarioActual) return;
+  const persona = usuarioActual.nombre;
 
   const previo = (exercise.pesos || []).find((p) => p.persona === persona);
   const entrada = prompt(
@@ -230,7 +170,6 @@ async function registrarPeso(exercise) {
       body: JSON.stringify({
         action: "logWeight",
         ejercicio_id: exercise.id,
-        persona,
         peso,
         fecha: fechaHoy()
       })
@@ -254,8 +193,7 @@ async function obtenerHistorialPeso(exercise, persona) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       action: "getWeightHistory",
-      ejercicio_id: exercise.id,
-      persona
+      ejercicio_id: exercise.id
     })
   });
 
@@ -268,6 +206,7 @@ async function obtenerHistorialPeso(exercise, persona) {
 }
 
 async function verHistorialPeso(exercise, persona) {
+  if (!esMiPersona(persona)) return;
   try {
     const historial = await obtenerHistorialPeso(exercise, persona);
     renderHistorialPeso(exercise, persona, historial);
@@ -340,7 +279,7 @@ function renderHistorialPeso(exercise, persona, historial) {
         const response = await fetch("/api/rutina", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "updateWeight", id, persona, peso })
+          body: JSON.stringify({ action: "updateWeight", id, peso })
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.ok) {
@@ -363,7 +302,7 @@ function renderHistorialPeso(exercise, persona, historial) {
         const response = await fetch("/api/rutina", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "deleteWeight", id, persona })
+          body: JSON.stringify({ action: "deleteWeight", id })
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.ok) {
@@ -393,11 +332,11 @@ async function mostrarInfo() {
   await renderInfoTab();
 }
 
-async function obtenerHistorialMetricas(persona) {
+async function obtenerHistorialMetricas() {
   const response = await fetch("/api/rutina", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "getMetricasHistory", persona })
+    body: JSON.stringify({ action: "getMetricasHistory" })
   });
 
   const result = await response.json().catch(() => ({}));
@@ -409,16 +348,8 @@ async function obtenerHistorialMetricas(persona) {
 }
 
 async function renderInfoTab() {
-  const persona = asegurarPersona();
-  if (!persona) {
-    infoSection.innerHTML = `
-      <div class="fallback" style="border-radius:16px">
-        <h3>Necesitamos tu nombre</h3>
-        <p>Así identificamos de quién es cada registro.</p>
-      </div>
-    `;
-    return;
-  }
+  const persona = nombreUsuario();
+  if (!persona) return;
 
   infoSection.innerHTML = `
     <div class="day-head">
@@ -427,7 +358,6 @@ async function renderInfoTab() {
     <div class="metrica-card">
       <div class="metrica-card-head">
         <strong id="infoPersonaNombre"></strong>
-        <button type="button" class="small" id="cambiarPersonaInfo">Cambiar nombre</button>
       </div>
       <form id="metricaForm">
         <div class="field"><label>Fecha</label><input type="date" id="metricaFecha" required></div>
@@ -441,7 +371,6 @@ async function renderInfoTab() {
   `;
 
   document.getElementById("infoPersonaNombre").textContent = persona;
-  document.getElementById("cambiarPersonaInfo").addEventListener("click", abrirSelectorPersona);
 
   const form = document.getElementById("metricaForm");
   const fechaInput = document.getElementById("metricaFecha");
@@ -470,7 +399,6 @@ async function renderInfoTab() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "logMetrica",
-          persona,
           fecha: fechaInput.value,
           peso,
           grasa,
@@ -485,22 +413,22 @@ async function renderInfoTab() {
 
       form.reset();
       fechaInput.value = fechaHoy();
-      await cargarHistorialMetricas(persona);
+      await cargarHistorialMetricas();
     } catch (error) {
       alert(error.message);
     }
   });
 
-  await cargarHistorialMetricas(persona);
+  await cargarHistorialMetricas();
 }
 
-async function cargarHistorialMetricas(persona) {
+async function cargarHistorialMetricas() {
   const contenedor = document.getElementById("metricaHistorial");
   if (!contenedor) return;
 
   try {
-    const historial = await obtenerHistorialMetricas(persona);
-    renderHistorialMetricas(persona, historial);
+    const historial = await obtenerHistorialMetricas();
+    renderHistorialMetricas(historial);
   } catch (error) {
     contenedor.innerHTML = `<p class="footer-note">${esc(error.message)}</p>`;
   }
@@ -579,7 +507,7 @@ function construirGraficoSVG(historialCompleto) {
   `;
 }
 
-function renderHistorialMetricas(persona, historial) {
+function renderHistorialMetricas(historial) {
   const contenedor = document.getElementById("metricaHistorial");
   if (!contenedor) return;
 
@@ -651,13 +579,13 @@ function renderHistorialMetricas(persona, historial) {
         const response = await fetch("/api/rutina", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "deleteMetrica", id, persona })
+          body: JSON.stringify({ action: "deleteMetrica", id })
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.ok) {
           throw new Error(result.error || "No se pudo eliminar el registro.");
         }
-        await cargarHistorialMetricas(persona);
+        await cargarHistorialMetricas();
       } catch (error) {
         alert(error.message);
       }
@@ -666,16 +594,9 @@ function renderHistorialMetricas(persona, historial) {
 }
 
 async function api(action, data = {}) {
-  if (!adminPassword) {
-    throw new Error("No hay contraseña de administrador.");
-  }
-
   const response = await fetch("/api/rutina", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-routine-admin-password": adminPassword
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action, ...data })
   });
 
@@ -696,10 +617,17 @@ async function cargarRutina() {
 
   const result = await response.json().catch(() => ({}));
 
+  if (response.status === 401) {
+    usuarioActual = null;
+    mostrarPantallaLogin();
+    throw new Error("No autorizado.");
+  }
+
   if (!response.ok || !Array.isArray(result.rutina)) {
     throw new Error(result.error || "No se pudo cargar la rutina.");
   }
 
+  usuarioActual = result.usuario || usuarioActual;
   rutina = result.rutina;
 
   if (!diaRestaurado) {
@@ -765,7 +693,7 @@ function render() {
       const pesosHtml = (exercise.pesos || [])
         .map(
           (p) => `
-            <button type="button" class="weight-chip" data-persona="${esc(p.persona)}">
+            <button type="button" class="weight-chip${esMiPersona(p.persona) ? " mine" : ""}" data-persona="${esc(p.persona)}">
               ${icon("dumbbell")} ${esc(p.persona)} <strong>${formatPeso(p.peso)}kg</strong>
             </button>
           `
@@ -915,102 +843,9 @@ function closeVideo() {
   modalBody.innerHTML = "";
 }
 
-async function pedirContraseña() {
-  if (adminPassword) return true;
-
-  const password = prompt("Contraseña de edición:");
-  if (!password) return false;
-
-  adminPassword = password;
-
-  try {
-    await api("validate");
-    return true;
-  } catch (error) {
-    adminPassword = "";
-    alert("Contraseña incorrecta o el panel de edición no está configurado.");
-    return false;
-  }
-}
-
 async function openEditor() {
-  if (!(await pedirContraseña())) return;
   editor.classList.add("open");
   renderEditor();
-}
-
-async function gestionarPersonas() {
-  if (!(await pedirContraseña())) return;
-
-  try {
-    const result = await api("listPersonas");
-    renderPersonas(result.personas || []);
-    modal.classList.add("open");
-  } catch (error) {
-    alert(error.message);
-  }
-}
-
-function renderPersonas(personas) {
-  modalTitle.textContent = "Personas";
-  modal.querySelector(".modal-card").classList.remove("vertical");
-
-  if (!personas.length) {
-    modalBody.innerHTML = `
-      <div class="fallback">
-        <h3>Todavía no hay personas registradas</h3>
-        <p>Cuando alguien registre un peso va a aparecer acá.</p>
-      </div>
-    `;
-    return;
-  }
-
-  const filas = personas
-    .map(
-      (p) => `
-        <div class="history-row" data-persona="${esc(p.persona)}">
-          <div class="history-info">
-            <span class="history-peso">${esc(p.persona)}</span>
-            <span class="history-fecha">${p.registros} peso${p.registros === 1 ? "" : "s"} registrado${p.registros === 1 ? "" : "s"}</span>
-          </div>
-          <div class="history-actions">
-            <button type="button" class="small danger persona-delete">${icon("trash-2")} Eliminar persona</button>
-          </div>
-        </div>
-      `
-    )
-    .join("");
-
-  modalBody.innerHTML = `<div class="history-list">${filas}</div>`;
-
-  modalBody.querySelectorAll(".history-row").forEach((row) => {
-    const persona = row.dataset.persona;
-
-    row.querySelector(".persona-delete").addEventListener("click", async () => {
-      if (
-        !confirm(
-          `¿Eliminar a "${persona}" y todos sus pesos registrados en todos los ejercicios? Esta acción no se puede deshacer.`
-        )
-      ) {
-        return;
-      }
-
-      try {
-        const result = await api("deletePersona", { persona });
-        rutina = result.rutina;
-        render();
-
-        if (obtenerPersona() === persona) {
-          localStorage.removeItem(PERSONA_KEY);
-        }
-
-        const actualizado = await api("listPersonas");
-        renderPersonas(actualizado.personas || []);
-      } catch (error) {
-        alert(error.message);
-      }
-    });
-  });
 }
 
 function renderEditor() {
@@ -1516,9 +1351,8 @@ exportDataButton.addEventListener("click", () => {
 });
 
 editorButton.addEventListener("click", openEditor);
-personaButton.addEventListener("click", abrirSelectorPersona);
+personaButton.addEventListener("click", cerrarSesion);
 progresoButton.addEventListener("click", mostrarInfo);
-managePersonasButton.addEventListener("click", gestionarPersonas);
 closeEditorButton.addEventListener("click", () => editor.classList.remove("open"));
 closeVideoButton.addEventListener("click", closeVideo);
 modal.addEventListener("click", (event) => {
@@ -1581,17 +1415,142 @@ if ("serviceWorker" in navigator) {
   });
 })();
 
+// --- Login / registro ---
+
+const authScreen = document.getElementById("authScreen");
+const appRoot = document.getElementById("appRoot");
+const authForm = document.getElementById("authForm");
+const authNombreField = document.getElementById("authNombreField");
+const authNombre = document.getElementById("authNombre");
+const authEmail = document.getElementById("authEmail");
+const authPassword = document.getElementById("authPassword");
+const authError = document.getElementById("authError");
+const authSubmit = document.getElementById("authSubmit");
+const authSwitch = document.getElementById("authSwitch");
+const googleButtonContainer = document.getElementById("googleButtonContainer");
+
+let modoAuth = "login";
+let googleListo = false;
+
+function mostrarPantallaApp() {
+  authScreen.hidden = true;
+  appRoot.hidden = false;
+}
+
+function mostrarPantallaLogin() {
+  appRoot.hidden = true;
+  authScreen.hidden = false;
+  authError.hidden = true;
+  inicializarGoogleSignIn();
+}
+
+function actualizarFormularioAuth() {
+  authNombreField.hidden = modoAuth !== "register";
+  authNombre.required = modoAuth === "register";
+  authPassword.autocomplete = modoAuth === "register" ? "new-password" : "current-password";
+  authSubmit.textContent = modoAuth === "register" ? "Crear cuenta" : "Iniciar sesión";
+  authSwitch.textContent =
+    modoAuth === "register" ? "¿Ya tenés cuenta? Iniciá sesión" : "¿No tenés cuenta? Registrate";
+  authError.hidden = true;
+}
+
+authSwitch.addEventListener("click", () => {
+  modoAuth = modoAuth === "login" ? "register" : "login";
+  actualizarFormularioAuth();
+});
+
+authForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  authError.hidden = true;
+
+  const email = authEmail.value.trim();
+  const password = authPassword.value;
+  const nombre = authNombre.value.trim();
+
+  authSubmit.disabled = true;
+
+  try {
+    const result =
+      modoAuth === "register"
+        ? await api("register", { email, password, nombre })
+        : await api("login", { email, password });
+
+    usuarioActual = result.usuario;
+    authForm.reset();
+    mostrarPantallaApp();
+    await cargarRutina();
+  } catch (error) {
+    authError.textContent = error.message;
+    authError.hidden = false;
+  } finally {
+    authSubmit.disabled = false;
+  }
+});
+
+async function onGoogleCredential(respuesta) {
+  authError.hidden = true;
+  try {
+    const result = await api("googleLogin", { id_token: respuesta.credential });
+    usuarioActual = result.usuario;
+    mostrarPantallaApp();
+    await cargarRutina();
+  } catch (error) {
+    authError.textContent = error.message;
+    authError.hidden = false;
+  }
+}
+
+async function inicializarGoogleSignIn(intentos = 0) {
+  if (googleListo) return;
+
+  if (!window.google || !window.google.accounts || !window.google.accounts.id) {
+    if (intentos < 20) setTimeout(() => inicializarGoogleSignIn(intentos + 1), 250);
+    return;
+  }
+
+  try {
+    const config = await api("config");
+    if (!config.googleClientId) {
+      googleButtonContainer.hidden = true;
+      return;
+    }
+
+    window.google.accounts.id.initialize({
+      client_id: config.googleClientId,
+      callback: onGoogleCredential
+    });
+
+    window.google.accounts.id.renderButton(googleButtonContainer, {
+      theme: "outline",
+      size: "large",
+      width: 300,
+      locale: "es"
+    });
+
+    googleListo = true;
+  } catch (error) {
+    googleButtonContainer.hidden = true;
+  }
+}
+
 (async function iniciar() {
+  actualizarFormularioAuth();
+
   try {
     limpiarChecksAntiguos();
     await cargarRutina();
+    mostrarPantallaApp();
   } catch (error) {
-    console.error(error);
-    content.innerHTML = `
-      <div class="card">
-        <div class="name">No se pudo cargar la rutina</div>
-        <div class="meta">${esc(error.message)}</div>
-      </div>
-    `;
+    if (!usuarioActual) {
+      mostrarPantallaLogin();
+    } else {
+      console.error(error);
+      content.innerHTML = `
+        <div class="card">
+          <div class="name">No se pudo cargar la rutina</div>
+          <div class="meta">${esc(error.message)}</div>
+        </div>
+      `;
+    }
   }
 })();

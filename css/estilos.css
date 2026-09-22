@@ -237,3 +237,18 @@ button{
   align-items: center;
   gap: .45em;
 }
+/* --- Pantalla de login / registro --- */
+.auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:linear-gradient(135deg,#2b0d24 0%,#7a1252 52%,#ec4899 100%)}
+.auth-card{width:100%;max-width:380px;background:var(--card);border-radius:var(--radius-lg);padding:26px 22px;box-shadow:0 20px 50px rgba(122,18,82,.35)}
+.auth-card h1{display:flex;align-items:center;gap:8px;margin:0 0 4px;font-size:22px}
+.auth-subtitle{color:var(--muted);margin:0 0 18px;font-size:14px}
+.google-button-container{display:flex;justify-content:center;min-height:40px;margin-bottom:14px}
+.auth-divider{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12.5px;margin:14px 0}
+.auth-divider::before,.auth-divider::after{content:"";flex:1;height:1px;background:var(--line)}
+.auth-error{color:#c92a2a;background:#fff0f0;border:1px solid #ffc9c9;border-radius:var(--radius-sm);padding:9px 12px;font-size:13px;margin:2px 0 12px}
+.auth-switch{display:block;width:100%;text-align:center;background:none;border:none;color:var(--accent2);font-weight:700;font-size:13.5px;margin-top:14px;cursor:pointer;padding:6px}
+#authForm .field{margin-bottom:12px}
+#authForm label{display:block;font-size:12.5px;font-weight:700;color:var(--muted);margin-bottom:4px}
+#authForm input{width:100%;padding:10px 12px;border-radius:var(--radius-sm);border:1px solid var(--line);font-size:15px}
+#authForm input:focus{outline:2px solid rgba(214,51,108,.18);border-color:var(--accent)}
+#authForm .main-btn{width:100%;margin-top:4px;border:none;padding:12px;border-radius:var(--radius-sm);font-size:15px;font-weight:800;cursor:pointer}

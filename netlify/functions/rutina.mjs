@@ -1,3 +1,8 @@
+// ⚠️ DESACTUALIZADO: esta función Netlify no fue actualizada junto con
+// rutina-api-node.mjs (que es la que corre en producción, ver README).
+// No tiene el sistema de usuarios/login ni el modelo de rutina por usuario.
+// Si en algún momento se usa este entrypoint, hay que replicarle los mismos
+// cambios que a rutina-api-node.mjs antes de ponerlo en producción.
 import { getDatabase } from "@netlify/database";
 
 const db = getDatabase();
