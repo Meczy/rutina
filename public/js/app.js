@@ -1477,8 +1477,13 @@ authForm.addEventListener("submit", async (event) => {
 
     usuarioActual = result.usuario;
     authForm.reset();
-    mostrarPantallaApp();
-    await cargarRutina();
+    if (usuarioActual && usuarioActual.rol === "admin") {
+      authScreen.hidden = true;
+      window.MiRutinaAdmin.iniciar();
+    } else {
+      mostrarPantallaApp();
+      await cargarRutina();
+    }
   } catch (error) {
     authError.textContent = error.message;
     authError.hidden = false;
@@ -1492,8 +1497,13 @@ async function onGoogleCredential(respuesta) {
   try {
     const result = await api("googleLogin", { id_token: respuesta.credential });
     usuarioActual = result.usuario;
-    mostrarPantallaApp();
-    await cargarRutina();
+    if (usuarioActual && usuarioActual.rol === "admin") {
+      authScreen.hidden = true;
+      window.MiRutinaAdmin.iniciar();
+    } else {
+      mostrarPantallaApp();
+      await cargarRutina();
+    }
   } catch (error) {
     authError.textContent = error.message;
     authError.hidden = false;
@@ -1539,6 +1549,12 @@ async function inicializarGoogleSignIn(intentos = 0) {
   try {
     limpiarChecksAntiguos();
     await cargarRutina();
+    if (usuarioActual && usuarioActual.rol === "admin") {
+      authScreen.hidden = true;
+      appRoot.hidden = true;
+      window.MiRutinaAdmin.iniciar();
+      return;
+    }
     mostrarPantallaApp();
   } catch (error) {
     if (!usuarioActual) {

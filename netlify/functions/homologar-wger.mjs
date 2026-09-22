@@ -1,4 +1,10 @@
 /**
+ * ⚠️ DESACTUALIZADO: este script usaba ROUTINE_ADMIN_PASSWORD, que ya no
+ * existe. Ahora la API requiere estar logueado (cookie de sesión). Para
+ * volver a usar este script hay que autenticarse primero (POST /api/rutina
+ * con action "login" o "googleLogin") y reusar la cookie que devuelve, en
+ * vez del header x-routine-admin-password.
+ *
  * Homologa los ejercicios existentes de MecFit con los de la API de WGER.
  *
  * Qué hace:

@@ -77,6 +77,46 @@
         <section class="info-section" id="infoSection"></section>
         <div class="footer-note">Tu progreso y tus cambios se guardan en este navegador.</div>
     </div>
+    <div class="app" id="panelAdmin" hidden>
+        <header class="hero">
+            <div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;position:relative;z-index:1">
+                <div>
+                    <h1><svg class="icon icon-lg" aria-hidden="true"><use href="icons/sprite.svg#user"></use></svg> Panel de administración</h1>
+                    <p>Usuarios, rutinas y progreso.</p>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;position:relative;z-index:1">
+                    <button class="persona-btn" id="adminLogoutButton">Cerrar sesión</button>
+                </div>
+            </div>
+        </header>
+
+        <main id="adminContent">
+            <section class="card" id="adminUsuariosSection">
+                <div class="name">Usuarios</div>
+                <div id="adminListaUsuarios" class="admin-lista-usuarios"></div>
+            </section>
+
+            <section class="card" id="adminDetalleSection" hidden>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+                    <div class="name" id="adminUsuarioNombre">—</div>
+                    <button class="small" id="adminVolverBtn">← Volver a usuarios</button>
+                </div>
+
+                <div class="tabs-wrap">
+                    <div class="tabs" id="adminTabs">
+                        <button type="button" class="tab active" data-admin-tab="rutina">Rutina</button>
+                        <button type="button" class="tab" data-admin-tab="pesos">Pesos</button>
+                        <button type="button" class="tab" data-admin-tab="metricas">Métricas</button>
+                    </div>
+                </div>
+
+                <div id="adminTabRutina" class="admin-tab-panel"></div>
+                <div id="adminTabPesos" class="admin-tab-panel" hidden></div>
+                <div id="adminTabMetricas" class="admin-tab-panel" hidden></div>
+            </section>
+        </main>
+    </div>
+
     <div class="modal" id="modal">
         <div class="modal-card">
             <div class="modal-top">
@@ -135,7 +175,37 @@
         data-seed-day>{"numero": "4", "titulo": "Pierna (cuádriceps) y pierna femoral", "ejercicios": [{"name": "Extensión de Rodilla en máquina", "series": "3", "reps": "10", "url": "https://www.youtube.com/shorts/PzIfB9MiiX8", "embed": "https://www.youtube.com/embed/PzIfB9MiiX8?rel=0&modestbranding=1"}, {"name": "Sentadilla goblet con elevacion", "series": "3", "reps": "10", "url": "https://www.youtube.com/watch?v=RUXLuZ_GLrE", "embed": "https://www.youtube.com/embed/RUXLuZ_GLrE?rel=0&modestbranding=1"}, {"name": "Press Pierna Inclinado", "series": "3", "reps": "10", "url": "https://www.youtube.com/shorts/NY5fw4Zaofg", "embed": "https://www.youtube.com/embed/NY5fw4Zaofg?rel=0&modestbranding=1"}, {"name": "Flexion Rodilla Maquina Sentado", "series": "3", "reps": "10", "url": "https://www.youtube.com/shorts/T46yKiz8laY", "embed": "https://www.youtube.com/embed/T46yKiz8laY?rel=0&modestbranding=1"}, {"name": "Good Morning Super Squat", "series": "3", "reps": "10", "url": "https://www.youtube.com/shorts/s0vCmIQpOOo?feature=share", "embed": "https://www.youtube.com/embed/s0vCmIQpOOo?rel=0&modestbranding=1"}, {"name": "Peso Muerto Rumano (con mancuernas)", "series": "3", "reps": "10", "url": "https://www.youtube.com/shorts/pQQrNsuCSug", "embed": "https://www.youtube.com/embed/pQQrNsuCSug?rel=0&modestbranding=1"}]}</script>
     <script type="application/json"
         data-seed-day>{"numero": "5 Glúteo, Pierna (abductores)", "titulo": "", "ejercicios": [{"name": "Hip thrust en máquina", "series": "3", "reps": "10", "url": "https://youtube.com/shorts/m8g9VogoxMo?si=u-Gw_9oqyI-iDGe5", "embed": "https://www.youtube.com/embed/m8g9VogoxMo?rel=0&modestbranding=1"}, {"name": "Sentadilla con barra", "series": "3", "reps": "10", "url": "https://youtube.com/shorts/7xeLHxobaWs?si=F8xNtmjBCI8KE0cM", "embed": "https://www.youtube.com/embed/7xeLHxobaWs?rel=0&modestbranding=1"}, {"name": "Patada de glúteo en polea", "series": "3", "reps": "10", "url": "https://youtube.com/shorts/GvgL2NbOaKE?si=Ehwt-obl4R4Dyp2i", "embed": "https://www.youtube.com/embed/GvgL2NbOaKE?rel=0&modestbranding=1"}, {"name": "Sentadilla sumo con mancuerna", "series": "3", "reps": "10", "url": "https://youtube.com/shorts/4YFyCNBwBwc?si=7mOCh2dv8s4h0Dum", "embed": "https://www.youtube.com/embed/4YFyCNBwBwc?rel=0&modestbranding=1"}, {"name": "Aducción de cadera en maquina", "series": "", "reps": "", "url": "https://youtube.com/shorts/vlViIgtkvh4?si=5e3gXGCbjzzmWid7", "embed": "https://www.youtube.com/embed/vlViIgtkvh4?rel=0&modestbranding=1"}, {"name": "Abducción de cadera en máquina", "series": "3", "reps": "10", "url": "https://youtube.com/shorts/HJLzMM_naPg?si=cR3V5bqph5fhuoy4", "embed": "https://www.youtube.com/embed/HJLzMM_naPg?rel=0&modestbranding=1"}]}</script>
+    <div class="editor" id="adminEditor">
+        <div class="editor-panel">
+            <div class="editor-head">
+                <h2 id="adminEditorTitle">Editar rutina</h2>
+                <button class="small" id="closeAdminEditor"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#x"></use></svg> Cerrar</button>
+            </div>
+            <div class="toolbar">
+                <button class="main-btn" id="adminAddDay"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#plus"></use></svg> Nuevo día</button>
+                <button class="small" id="adminCambiarRutinaBtn">Crear/asignar otra rutina…</button>
+            </div>
+            <div class="editor-tabs" id="adminEditorTabs"></div>
+            <div id="adminEditorList"></div>
+        </div>
+    </div>
+    <div class="form-overlay" id="adminExerciseForm">
+        <div class="form-card">
+            <h3 id="adminFormTitle">Agregar ejercicio</h3>
+            <form id="adminExerciseFormEl">
+                <div class="field"><label>Ejercicio</label><input id="adminExerciseName" required></div>
+                <div class="field"><label>Series</label><input id="adminExerciseSeries"></div>
+                <div class="field"><label>Repeticiones</label><input id="adminExerciseReps"></div>
+                <div class="field"><label>URL del video (opcional)</label><input id="adminExerciseUrl"
+                        placeholder="https://youtube.com/..."></div>
+                <div class="form-actions"><button type="button" class="small"
+                        id="adminCancelExercise">Cancelar</button><button type="submit" class="main-btn">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
     <script src="js/app.js"></script>
+    <script src="js/admin.js"></script>
 </body>
 
 </html>
