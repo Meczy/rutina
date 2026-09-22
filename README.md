@@ -159,12 +159,44 @@ Crear un archivo `.env` en la raíz del proyecto:
 
 ```env
 NETLIFY_DATABASE_URL=postgresql://USUARIO:CONTRASEÑA@localhost:5432/rutina
-ROUTINE_ADMIN_PASSWORD=CONTRASEÑA_ADMIN
+GOOGLE_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
 ```
+
+`ROUTINE_ADMIN_PASSWORD` ya no se usa: ahora el acceso se controla con cuentas
+de usuario reales (login por correo/contraseña o con Google), y cada quien
+solo puede editar la rutina de la que forma parte.
+
+### Configurar el login con Google
+
+1. Entrar a [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
+2. Crear (o usar) un proyecto, y configurar la "pantalla de consentimiento
+   OAuth" (tipo Externo alcanza para uso personal/familiar).
+3. Crear credenciales → "ID de cliente de OAuth" → tipo **Aplicación web**.
+4. En "Orígenes de JavaScript autorizados" agregar el dominio donde corre la
+   app, por ejemplo `https://mecfit.app` (y `http://localhost:3000` para
+   probar en local).
+5. No hace falta generar ni usar el "Secreto de cliente": el login con Google
+   se valida solo con el Client ID.
+6. Copiar el Client ID (termina en `.apps.googleusercontent.com`) y pegarlo
+   en `GOOGLE_CLIENT_ID` dentro del `.env`.
+
+Si no se configura `GOOGLE_CLIENT_ID`, el botón de Google simplemente no se
+muestra y el login por correo/contraseña sigue funcionando igual.
 
 **Nunca subir `.env` al repositorio.**
 
 El archivo está excluido mediante `.gitignore`.
+
+## Cuentas y rutinas por usuario
+
+- Cada usuario nuevo que se registra arranca con su propia rutina vacía,
+  para armar sus propios días y ejercicios.
+- Las cuentas de Meczy y María (creadas por la migración) ya están
+  vinculadas entre sí a la rutina que existía antes de este cambio, así que
+  ambas la ven y la pueden editar.
+- Si en el futuro quieren dejar de compartir la rutina, hay que borrar la
+  fila correspondiente en `rutina_usuarios` y crearles una rutina propia
+  (insertar en `rutinas` y en `rutina_usuarios`).
 
 ## Desarrollo local
 
