@@ -1,0 +1,19 @@
+cd /home/rutina/app
+nano .gitignore
+# Variables de entorno
+.env
+.env.*
+
+# Dependencias
+node_modules/
+
+# Logs
+*.log
+
+# Archivos temporales / backups locales
+*.backup
+*.bak
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db

@@ -24,6 +24,7 @@ let vista = "dias";
 let diaRestaurado = false;
 
 const tabs = document.getElementById("tabs");
+const tabsWrap = document.getElementById("tabsWrap");
 const content = document.getElementById("content");
 const infoSection = document.getElementById("infoSection");
 const editor = document.getElementById("editor");
@@ -95,16 +96,29 @@ function fechaHoy() {
   return new Date(ahora.getTime() - offsetMs).toISOString().slice(0, 10);
 }
 
+// Fecha del lunes de la semana actual (en la hora local del navegador).
+// Se usa como parte de la clave de los checks para que se "desmarquen"
+// solos al empezar una semana nueva, en vez de cada día.
+function inicioSemana() {
+  const ahora = new Date();
+  const offsetMs = ahora.getTimezoneOffset() * 60000;
+  const local = new Date(ahora.getTime() - offsetMs);
+  const diaSemana = local.getUTCDay(); // 0 = domingo, 1 = lunes, ... 6 = sábado
+  const diasHastaLunes = diaSemana === 0 ? 6 : diaSemana - 1;
+  local.setUTCDate(local.getUTCDate() - diasHastaLunes);
+  return local.toISOString().slice(0, 10);
+}
+
 function guardarUltimoDia(day) {
   if (day) localStorage.setItem(LAST_DAY_KEY, String(day.id));
 }
 
 function limpiarChecksAntiguos() {
-  const hoy = fechaHoy();
+  const lunesActual = inicioSemana();
   const aBorrar = [];
   for (let i = 0; i < localStorage.length; i += 1) {
     const key = localStorage.key(i);
-    if (key && key.startsWith(DONE_PREFIX) && !key.endsWith(hoy)) {
+    if (key && key.startsWith(DONE_PREFIX) && !key.endsWith(lunesActual)) {
       aBorrar.push(key);
     }
   }
@@ -324,6 +338,7 @@ function renderHistorialPeso(exercise, persona, historial) {
 async function mostrarInfo() {
   vista = "info";
   content.hidden = true;
+  tabsWrap.hidden = true;
   infoSection.classList.add("active");
   progresoButton.classList.add("active");
 
@@ -681,7 +696,7 @@ function render() {
 
     day.ejercicios.forEach((exercise, exerciseIndex) => {
       const completed =
-        localStorage.getItem(`${DONE_PREFIX}${day.id}-${exercise.id}-${fechaHoy()}`) === "1";
+        localStorage.getItem(`${DONE_PREFIX}${day.id}-${exercise.id}-${inicioSemana()}`) === "1";
 
       const card = document.createElement("article");
       const platform = /instagram\.com/i.test(exercise.url || "")
@@ -757,7 +772,7 @@ function render() {
 
       card.querySelector(".check").addEventListener("change", (event) => {
         localStorage.setItem(
-          `${DONE_PREFIX}${day.id}-${exercise.id}-${fechaHoy()}`,
+          `${DONE_PREFIX}${day.id}-${exercise.id}-${inicioSemana()}`,
           event.target.checked ? "1" : "0"
         );
         card.classList.toggle("done", event.target.checked);
@@ -771,6 +786,7 @@ function render() {
   });
 
   content.hidden = vista !== "dias";
+  tabsWrap.hidden = vista !== "dias";
   infoSection.classList.toggle("active", vista === "info");
   progresoButton.classList.toggle("active", vista === "info");
   actualizarPersonaButton();
@@ -782,6 +798,7 @@ function showDay(index) {
   guardarUltimoDia(rutina[index]);
 
   content.hidden = false;
+  tabsWrap.hidden = false;
   infoSection.classList.remove("active");
   progresoButton.classList.remove("active");
 
@@ -1477,8 +1494,13 @@ authForm.addEventListener("submit", async (event) => {
 
     usuarioActual = result.usuario;
     authForm.reset();
-    mostrarPantallaApp();
-    await cargarRutina();
+    if (usuarioActual && usuarioActual.rol === "admin") {
+      authScreen.hidden = true;
+      window.MiRutinaAdmin.iniciar();
+    } else {
+      mostrarPantallaApp();
+      await cargarRutina();
+    }
   } catch (error) {
     authError.textContent = error.message;
     authError.hidden = false;
@@ -1492,8 +1514,13 @@ async function onGoogleCredential(respuesta) {
   try {
     const result = await api("googleLogin", { id_token: respuesta.credential });
     usuarioActual = result.usuario;
-    mostrarPantallaApp();
-    await cargarRutina();
+    if (usuarioActual && usuarioActual.rol === "admin") {
+      authScreen.hidden = true;
+      window.MiRutinaAdmin.iniciar();
+    } else {
+      mostrarPantallaApp();
+      await cargarRutina();
+    }
   } catch (error) {
     authError.textContent = error.message;
     authError.hidden = false;
@@ -1539,6 +1566,12 @@ async function inicializarGoogleSignIn(intentos = 0) {
   try {
     limpiarChecksAntiguos();
     await cargarRutina();
+    if (usuarioActual && usuarioActual.rol === "admin") {
+      authScreen.hidden = true;
+      appRoot.hidden = true;
+      window.MiRutinaAdmin.iniciar();
+      return;
+    }
     mostrarPantallaApp();
   } catch (error) {
     if (!usuarioActual) {
