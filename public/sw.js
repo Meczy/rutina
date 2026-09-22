@@ -1,4 +1,4 @@
-const CACHE_NAME = "mi-rutina-shell-v4";
+const CACHE_NAME = "mi-rutina-shell-v5";
 
 const APP_SHELL = [
   "/",
