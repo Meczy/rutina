@@ -232,9 +232,9 @@ async function manejarAccionAdmin(action, body, usuarioActual) {
     if (!Number.isInteger(targetId)) return respuesta({ error: "Usuario inválido." }, 400);
 
     const historial = await db.sql`
-      SELECT p.id, p.peso, p.fecha, e.nombre AS ejercicio
+      SELECT p.id, p.peso, p.fecha, c.nombre AS ejercicio
       FROM pesos p
-      JOIN ejercicios e ON e.id = p.ejercicio_id
+      JOIN ejercicios_catalogo c ON c.id = p.catalogo_id
       WHERE p.usuario_id = ${targetId}
       ORDER BY p.fecha DESC, p.created_at DESC
       LIMIT 200
@@ -292,6 +292,44 @@ async function ejercicioPerteneceARutina(ejercicioId, rutinaId) {
   return filas.length > 0;
 }
 
+// El catálogo de ejercicios (nombre/imagen/video) vive por rutina, separado
+// de en qué días aparece cada uno (ver migración 20260926180000).
+async function catalogoPerteneceARutina(catalogoId, rutinaId) {
+  const filas = await db.sql`
+    SELECT id FROM ejercicios_catalogo WHERE id = ${catalogoId} AND rutina_id = ${rutinaId}
+  `;
+  return filas.length > 0;
+}
+
+// Evita duplicados por nombre dentro del catálogo de una misma rutina
+// (comparación sin mayúsculas/minúsculas ni espacios de más). excluirId se
+// usa al renombrar, para no chocar contra el propio registro.
+async function nombreDuplicadoEnCatalogo(rutinaId, nombre, excluirId = null) {
+  const filas = excluirId
+    ? await db.sql`
+        SELECT id FROM ejercicios_catalogo
+        WHERE rutina_id = ${rutinaId} AND lower(nombre) = lower(${nombre}) AND id <> ${excluirId}
+      `
+    : await db.sql`
+        SELECT id FROM ejercicios_catalogo
+        WHERE rutina_id = ${rutinaId} AND lower(nombre) = lower(${nombre})
+      `;
+  return filas.length > 0;
+}
+
+// Busca si ya existe un ejercicio con ese nombre en el catálogo de la
+// rutina (sin distinguir mayúsculas/minúsculas ni espacios de más), para
+// evitar duplicados que dividirían el historial de peso en dos.
+async function buscarDuplicadoEnCatalogo(rutinaId, nombre, excluirId = null) {
+  const filas = await db.sql`
+    SELECT id, nombre FROM ejercicios_catalogo
+    WHERE rutina_id = ${rutinaId}
+      AND LOWER(TRIM(nombre)) = LOWER(TRIM(${nombre}))
+      AND id <> ${excluirId ?? -1}
+  `;
+  return filas.length ? { id: Number(filas[0].id), nombre: filas[0].nombre } : null;
+}
+
 // ---------- Rutina ----------
 
 async function obtenerRutina(rutinaId) {
@@ -306,21 +344,26 @@ async function obtenerRutina(rutinaId) {
 
   const ejercicios = diaIds.length
     ? await db.sql`
-      SELECT id, dia_id, nombre, series, repeticiones, video_url, image_url, wger_id, orden
-      FROM ejercicios
-      WHERE dia_id = ANY(${diaIds})
-      ORDER BY dia_id, orden, id
+      SELECT e.id, e.dia_id, e.series, e.repeticiones, e.orden,
+             c.id AS catalogo_id, c.nombre, c.video_url, c.image_url, c.wger_id
+      FROM ejercicios e
+      JOIN ejercicios_catalogo c ON c.id = e.catalogo_id
+      WHERE e.dia_id = ANY(${diaIds})
+      ORDER BY e.dia_id, e.orden, e.id
     `
     : [];
 
-  const ejercicioIds = ejercicios.map((e) => Number(e.id));
+  const catalogoIds = [...new Set(ejercicios.map((e) => Number(e.catalogo_id)))];
 
-  const pesos = ejercicioIds.length
+  // Los pesos se guardan por ejercicio de catálogo (no por su aparición en
+  // un día puntual), así que el mismo ejercicio usado en varios días
+  // comparte un único historial de peso.
+  const pesos = catalogoIds.length
     ? await db.sql`
-      SELECT ejercicio_id, persona, peso, fecha
+      SELECT catalogo_id, persona, peso, fecha
       FROM pesos
-      WHERE ejercicio_id = ANY(${ejercicioIds})
-      ORDER BY ejercicio_id, persona, fecha DESC, created_at DESC
+      WHERE catalogo_id = ANY(${catalogoIds})
+      ORDER BY catalogo_id, persona, fecha DESC, created_at DESC
     `
     : [];
 
@@ -334,6 +377,7 @@ async function obtenerRutina(rutinaId) {
       .map((e) => ({
         id: Number(e.id),
         dia_id: Number(e.dia_id),
+        catalogoId: Number(e.catalogo_id),
         name: e.nombre,
         series: e.series ?? "",
         reps: e.repeticiones ?? "",
@@ -342,7 +386,7 @@ async function obtenerRutina(rutinaId) {
         wgerId: e.wger_id === null || e.wger_id === undefined ? null : Number(e.wger_id),
         orden: Number(e.orden),
         pesos: pesos
-          .filter((p) => Number(p.ejercicio_id) === Number(e.id))
+          .filter((p) => Number(p.catalogo_id) === Number(e.catalogo_id))
           .reduce((acc, p) => {
             if (!acc.some((item) => item.persona === p.persona)) {
               acc.push({
@@ -617,22 +661,48 @@ export default async (request) => {
     }
 
     if (action === "createExercise") {
+      // Agrega un ejercicio a un día. Puede ser uno ya existente del
+      // catálogo (body.catalogo_id) o uno nuevo (se crea en el catálogo de
+      // esta rutina y de una vez se asigna a este día).
       const diaId = Number(body.dia_id);
-      const nombre = String(body.nombre ?? "").trim();
       const series = String(body.series ?? "");
       const repeticiones = String(body.repeticiones ?? "");
-      const videoUrl = String(body.video_url ?? "");
-      const imageUrl = String(body.image_url ?? "").trim();
-      const wgerId =
-        body.wger_id === null || body.wger_id === undefined || body.wger_id === ""
-          ? null
-          : Number(body.wger_id);
 
-      if (!Number.isInteger(diaId) || !nombre) {
+      if (!Number.isInteger(diaId)) {
         return respuesta({ error: "Datos del ejercicio inválidos." }, 400);
       }
       if (!(await diaPerteneceARutina(diaId, rutinaId))) {
         return respuesta({ error: "El día no existe." }, 404);
+      }
+
+      let catalogoId = Number(body.catalogo_id);
+      if (Number.isInteger(catalogoId) && catalogoId > 0) {
+        if (!(await catalogoPerteneceARutina(catalogoId, rutinaId))) {
+          return respuesta({ error: "Ese ejercicio del catálogo no existe." }, 404);
+        }
+      } else {
+        const nombre = String(body.nombre ?? "").trim();
+        if (!nombre) return respuesta({ error: "Escribí el nombre del ejercicio." }, 400);
+        if (await nombreDuplicadoEnCatalogo(rutinaId, nombre)) {
+          return respuesta(
+            { error: `Ya tenés un ejercicio llamado "${nombre}" en tu catálogo. Elegilo de ahí en vez de crear uno nuevo.` },
+            409
+          );
+        }
+
+        const videoUrl = String(body.video_url ?? "");
+        const imageUrl = String(body.image_url ?? "").trim();
+        const wgerId =
+          body.wger_id === null || body.wger_id === undefined || body.wger_id === ""
+            ? null
+            : Number(body.wger_id);
+
+        const catalogoRows = await db.sql`
+          INSERT INTO ejercicios_catalogo (rutina_id, nombre, video_url, image_url, wger_id)
+          VALUES (${rutinaId}, ${nombre}, ${videoUrl}, ${imageUrl || null}, ${wgerId})
+          RETURNING id
+        `;
+        catalogoId = Number(catalogoRows[0].id);
       }
 
       const maxRows = await db.sql`
@@ -644,29 +714,26 @@ export default async (request) => {
       const orden = Number(maxRows[0].maximo) + 1;
 
       const rows = await db.sql`
-        INSERT INTO ejercicios
-          (dia_id, nombre, series, repeticiones, video_url, image_url, wger_id, orden)
-        VALUES
-          (${diaId}, ${nombre}, ${series}, ${repeticiones}, ${videoUrl}, ${imageUrl || null}, ${wgerId}, ${orden})
+        INSERT INTO ejercicios (dia_id, catalogo_id, series, repeticiones, orden)
+        VALUES (${diaId}, ${catalogoId}, ${series}, ${repeticiones}, ${orden})
         RETURNING id
       `;
 
-      return respuesta({ ok: true, id: Number(rows[0].id) }, 201);
+      return respuesta({ ok: true, id: Number(rows[0].id), catalogoId }, 201);
     }
 
     if (action === "updateExercise") {
+      // Series/repeticiones son propias de este día. Nombre/imagen/video
+      // pertenecen al catálogo: si vienen en el body se actualizan ahí, y
+      // el cambio se refleja en todos los días donde se use ese mismo
+      // ejercicio (por eso, si no vienen, se conservan tal cual estaban en
+      // vez de borrarlos — así el panel de admin, que no maneja imagen,
+      // no la pisa con vacío al editar solo el nombre/series).
       const id = Number(body.id);
-      const nombre = String(body.nombre ?? "").trim();
       const series = String(body.series ?? "");
       const repeticiones = String(body.repeticiones ?? "");
-      const videoUrl = String(body.video_url ?? "");
-      const imageUrl = String(body.image_url ?? "").trim();
-      const wgerId =
-        body.wger_id === null || body.wger_id === undefined || body.wger_id === ""
-          ? null
-          : Number(body.wger_id);
 
-      if (!Number.isInteger(id) || !nombre) {
+      if (!Number.isInteger(id)) {
         return respuesta({ error: "Datos del ejercicio inválidos." }, 400);
       }
       if (!(await ejercicioPerteneceARutina(id, rutinaId))) {
@@ -675,17 +742,147 @@ export default async (request) => {
 
       await db.sql`
         UPDATE ejercicios
-        SET
-          nombre = ${nombre},
-          series = ${series},
-          repeticiones = ${repeticiones},
-          video_url = ${videoUrl},
-          image_url = ${imageUrl || null},
-          wger_id = ${wgerId}
+        SET series = ${series}, repeticiones = ${repeticiones}
+        WHERE id = ${id}
+      `;
+
+      const nombre = String(body.nombre ?? "").trim();
+      if (nombre) {
+        const filas = await db.sql`SELECT catalogo_id FROM ejercicios WHERE id = ${id}`;
+        const catalogoId = Number(filas[0].catalogo_id);
+
+        if (await nombreDuplicadoEnCatalogo(rutinaId, nombre, catalogoId)) {
+          return respuesta(
+            { error: `Ya tenés otro ejercicio llamado "${nombre}" en tu catálogo.` },
+            409
+          );
+        }
+
+        const actual = await db.sql`
+          SELECT image_url, wger_id FROM ejercicios_catalogo WHERE id = ${catalogoId}
+        `;
+
+        const videoUrl = String(body.video_url ?? "");
+        const imageUrl =
+          body.image_url === undefined
+            ? actual[0].image_url ?? ""
+            : String(body.image_url ?? "").trim();
+        const wgerId =
+          body.wger_id === undefined
+            ? actual[0].wger_id === null || actual[0].wger_id === undefined
+              ? null
+              : Number(actual[0].wger_id)
+            : body.wger_id === null || body.wger_id === ""
+            ? null
+            : Number(body.wger_id);
+
+        await db.sql`
+          UPDATE ejercicios_catalogo
+          SET nombre = ${nombre}, video_url = ${videoUrl}, image_url = ${imageUrl || null}, wger_id = ${wgerId}
+          WHERE id = ${catalogoId}
+        `;
+      }
+
+      return respuesta({ ok: true });
+    }
+
+    if (action === "catalogoListar") {
+      const catalogo = await db.sql`
+        SELECT c.id, c.nombre, c.video_url, c.image_url, c.wger_id, COUNT(e.id) AS usos
+        FROM ejercicios_catalogo c
+        LEFT JOIN ejercicios e ON e.catalogo_id = c.id
+        WHERE c.rutina_id = ${rutinaId}
+        GROUP BY c.id
+        ORDER BY c.nombre
+      `;
+
+      return respuesta({
+        ok: true,
+        catalogo: catalogo.map((c) => ({
+          id: Number(c.id),
+          name: c.nombre,
+          url: c.video_url ?? "",
+          imageUrl: c.image_url ?? "",
+          wgerId: c.wger_id === null || c.wger_id === undefined ? null : Number(c.wger_id),
+          usos: Number(c.usos),
+        })),
+      });
+    }
+
+    if (action === "catalogoCrear") {
+      const nombre = String(body.nombre ?? "").trim();
+      if (!nombre) return respuesta({ error: "Escribí el nombre del ejercicio." }, 400);
+      if (await nombreDuplicadoEnCatalogo(rutinaId, nombre)) {
+        return respuesta(
+          { error: `Ya tenés un ejercicio llamado "${nombre}" en tu catálogo.` },
+          409
+        );
+      }
+
+      const videoUrl = String(body.video_url ?? "");
+      const imageUrl = String(body.image_url ?? "").trim();
+      const wgerId =
+        body.wger_id === null || body.wger_id === undefined || body.wger_id === ""
+          ? null
+          : Number(body.wger_id);
+
+      const rows = await db.sql`
+        INSERT INTO ejercicios_catalogo (rutina_id, nombre, video_url, image_url, wger_id)
+        VALUES (${rutinaId}, ${nombre}, ${videoUrl}, ${imageUrl || null}, ${wgerId})
+        RETURNING id
+      `;
+
+      return respuesta({ ok: true, id: Number(rows[0].id) }, 201);
+    }
+
+    if (action === "catalogoActualizar") {
+      const id = Number(body.id);
+      const nombre = String(body.nombre ?? "").trim();
+
+      if (!Number.isInteger(id) || !nombre) {
+        return respuesta({ error: "Datos del ejercicio inválidos." }, 400);
+      }
+      if (!(await catalogoPerteneceARutina(id, rutinaId))) {
+        return respuesta({ error: "Ese ejercicio no existe." }, 404);
+      }
+      if (await nombreDuplicadoEnCatalogo(rutinaId, nombre, id)) {
+        return respuesta(
+          { error: `Ya tenés otro ejercicio llamado "${nombre}" en tu catálogo.` },
+          409
+        );
+      }
+
+      const videoUrl = String(body.video_url ?? "");
+      const imageUrl = String(body.image_url ?? "").trim();
+      const wgerId =
+        body.wger_id === null || body.wger_id === undefined || body.wger_id === ""
+          ? null
+          : Number(body.wger_id);
+
+      await db.sql`
+        UPDATE ejercicios_catalogo
+        SET nombre = ${nombre}, video_url = ${videoUrl}, image_url = ${imageUrl || null}, wger_id = ${wgerId}
         WHERE id = ${id}
       `;
 
       return respuesta({ ok: true });
+    }
+
+    if (action === "catalogoEliminar") {
+      // Borra el ejercicio del catálogo por completo: desaparece de todos
+      // los días donde estaba asignado (ON DELETE CASCADE) junto con su
+      // historial de pesos. El frontend debe confirmar esto con el usuario
+      // antes de llamar a esta acción, mostrando en cuántos días se usa
+      // (dato que devuelve catalogoListar).
+      const id = Number(body.id);
+      if (!Number.isInteger(id)) return respuesta({ error: "ID inválido." }, 400);
+      if (!(await catalogoPerteneceARutina(id, rutinaId))) {
+        return respuesta({ error: "Ese ejercicio no existe." }, 404);
+      }
+
+      await db.sql`DELETE FROM ejercicios_catalogo WHERE id = ${id}`;
+
+      return respuesta({ ok: true, rutina: await obtenerRutina(rutinaId) });
     }
 
     if (action === "wgerCategorias") {
@@ -812,17 +1009,20 @@ export default async (request) => {
     }
 
     if (action === "logWeight") {
-      const ejercicioId = Number(body.ejercicio_id);
+      // El peso se guarda contra el ejercicio del catálogo (no contra su
+      // asignación a un día puntual), para que sea el mismo historial sin
+      // importar en cuántos días aparezca ese ejercicio.
+      const catalogoId = Number(body.catalogo_id ?? body.ejercicio_id);
       const peso = Number(body.peso);
       const fecha = String(body.fecha ?? "").trim();
 
-      if (!Number.isInteger(ejercicioId)) {
+      if (!Number.isInteger(catalogoId)) {
         return respuesta({ error: "Datos de peso inválidos." }, 400);
       }
       if (!Number.isFinite(peso) || peso <= 0 || peso > 999) {
         return respuesta({ error: "El peso debe ser un número mayor a 0." }, 400);
       }
-      if (!(await ejercicioPerteneceARutina(ejercicioId, rutinaId))) {
+      if (!(await catalogoPerteneceARutina(catalogoId, rutinaId))) {
         return respuesta({ error: "El ejercicio no existe." }, 404);
       }
 
@@ -833,16 +1033,16 @@ export default async (request) => {
       // en vez de crear uno nuevo (upsert vía ON CONFLICT).
       if (/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
         await db.sql`
-          INSERT INTO pesos (ejercicio_id, persona, peso, fecha, usuario_id)
-          VALUES (${ejercicioId}, ${persona}, ${peso}, ${fecha}, ${usuarioObjetivo.id})
-          ON CONFLICT (ejercicio_id, persona, fecha)
+          INSERT INTO pesos (catalogo_id, persona, peso, fecha, usuario_id)
+          VALUES (${catalogoId}, ${persona}, ${peso}, ${fecha}, ${usuarioObjetivo.id})
+          ON CONFLICT (catalogo_id, persona, fecha)
           DO UPDATE SET peso = EXCLUDED.peso, created_at = NOW(), usuario_id = ${usuarioObjetivo.id}
         `;
       } else {
         await db.sql`
-          INSERT INTO pesos (ejercicio_id, persona, peso, fecha, usuario_id)
-          VALUES (${ejercicioId}, ${persona}, ${peso}, CURRENT_DATE, ${usuarioObjetivo.id})
-          ON CONFLICT (ejercicio_id, persona, fecha)
+          INSERT INTO pesos (catalogo_id, persona, peso, fecha, usuario_id)
+          VALUES (${catalogoId}, ${persona}, ${peso}, CURRENT_DATE, ${usuarioObjetivo.id})
+          ON CONFLICT (catalogo_id, persona, fecha)
           DO UPDATE SET peso = EXCLUDED.peso, created_at = NOW(), usuario_id = ${usuarioObjetivo.id}
         `;
       }
@@ -885,16 +1085,16 @@ export default async (request) => {
     }
 
     if (action === "getWeightHistory") {
-      const ejercicioId = Number(body.ejercicio_id);
+      const catalogoId = Number(body.catalogo_id ?? body.ejercicio_id);
 
-      if (!Number.isInteger(ejercicioId)) {
+      if (!Number.isInteger(catalogoId)) {
         return respuesta({ error: "Datos inválidos." }, 400);
       }
 
       const historial = await db.sql`
         SELECT id, peso, fecha
         FROM pesos
-        WHERE ejercicio_id = ${ejercicioId} AND usuario_id = ${usuarioObjetivo.id}
+        WHERE catalogo_id = ${catalogoId} AND usuario_id = ${usuarioObjetivo.id}
         ORDER BY fecha DESC, created_at DESC
       `;
 
