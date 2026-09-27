@@ -531,6 +531,38 @@ function construirGraficoSVG(historialCompleto) {
   `;
 }
 
+// Resumen arriba de la lista: último registro + total ganado/perdido desde
+// el primer registro guardado (historial viene ordenado del más reciente
+// al más antiguo).
+function construirResumenPeso(historial) {
+  if (!historial.length) return "";
+
+  const ultimo = historial[0];
+  const primero = historial[historial.length - 1];
+  const totalDiferencia = historial.length >= 2 ? ultimo.peso - primero.peso : null;
+
+  const claseTotal = totalDiferencia > 0 ? " up" : totalDiferencia < 0 ? " down" : "";
+  const signoTotal =
+    totalDiferencia > 0 ? `+${formatPeso(totalDiferencia)}` :
+    totalDiferencia < 0 ? `${formatPeso(totalDiferencia)}` :
+    totalDiferencia === 0 ? "0" : "";
+
+  return `
+    <div class="metrica-card metrica-resumen">
+      <div class="history-info">
+        <span class="history-fecha">${formatFecha(ultimo.fecha)}</span>
+        <span class="history-peso">${formatPeso(ultimo.peso)}kg</span>
+        ${signoTotal ? `<span class="history-diff${claseTotal}">${signoTotal}</span>` : ""}
+      </div>
+      ${
+        totalDiferencia !== null
+          ? `<p class="footer-note">Total desde el ${esc(formatFecha(primero.fecha))}</p>`
+          : ""
+      }
+    </div>
+  `;
+}
+
 function renderHistorialMetricas(historial) {
   const contenedor = document.getElementById("metricaHistorial");
   if (!contenedor) return;
@@ -576,6 +608,7 @@ function renderHistorialMetricas(historial) {
     .join("");
 
   contenedor.innerHTML = `
+    ${construirResumenPeso(historial)}
     ${
       historial.length >= 2
         ? `<div class="metrica-card"><strong>Evolución del peso</strong>${construirGraficoSVG(historial)}</div>`
