@@ -5,14 +5,14 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
     <meta name="theme-color" content="#0b1020">
-    <title>Mi Rutina</title>
+    <title>Mi Rutina{{ENV_LABEL}}</title>
     <link rel="preload" href="icons/sprite.svg" as="image" type="image/svg+xml">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icons/icon-192.png">
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Mi Rutina">
+    <meta name="apple-mobile-web-app-title" content="Mi Rutina{{ENV_LABEL}}">
     <meta name="mobile-web-app-capable" content="yes">
     <link rel="stylesheet" href="css/estilos.css">
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -21,7 +21,7 @@
 <body>
     <div class="auth-screen" id="authScreen" hidden>
         <div class="auth-card">
-            <h1><svg class="icon icon-lg" aria-hidden="true"><use href="icons/sprite.svg#dumbbell"></use></svg> Mi Rutina</h1>
+            <h1><svg class="icon icon-lg" aria-hidden="true"><use href="icons/sprite.svg#dumbbell"></use></svg> Mi Rutina{{ENV_LABEL}}</h1>
             <p class="auth-subtitle">Iniciá sesión para ver tu rutina.</p>
 
             <div id="googleButtonContainer" class="google-button-container"></div>
@@ -50,7 +50,7 @@
     <div class="app" id="appRoot" hidden>
         <nav class="topnav" id="topnav">
             <div class="topnav-inner">
-                <div class="topnav-brand"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#dumbbell"></use></svg> Mi Rutina</div>
+                <div class="topnav-brand"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#dumbbell"></use></svg> Mi Rutina{{ENV_LABEL}}</div>
                 <button type="button" class="hamburger" id="navToggle" aria-label="Abrir menú" aria-expanded="false" aria-controls="navLinks">
                     <svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#menu"></use></svg>
                 </button>
@@ -66,7 +66,7 @@
             <div
                 style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;position:relative;z-index:1">
                 <div>
-                    <h1><svg class="icon icon-lg" aria-hidden="true"><use href="icons/sprite.svg#dumbbell"></use></svg> Mi Rutina-DEV</h1>
+                    <h1><svg class="icon icon-lg" aria-hidden="true"><use href="icons/sprite.svg#dumbbell"></use></svg> Mi Rutina{{ENV_LABEL}}</h1>
                     <p>Tu entrenamiento en un solo lugar.</p>
                 </div>
             </div>
