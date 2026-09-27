@@ -95,6 +95,11 @@
 .metrica-card .field label{display:block;font-weight:800;font-size:13px;margin-bottom:6px;color:var(--muted)}
 .metrica-card .field input{width:100%;padding:11px 12px;border:1px solid #d0d5dd;border-radius:12px;font:inherit}
 .metrica-card .main-btn{width:100%;margin-top:6px}
+.metrica-resumen{text-align:center}
+.metrica-resumen .history-info{justify-content:center}
+.metrica-resumen .history-peso{font-size:22px}
+.metrica-resumen .history-diff{font-size:14px}
+.metrica-resumen .footer-note{margin:6px 0 0;text-align:center}
 .progreso-chart{width:100%;height:auto;display:block}
 
 .image-frame{background:#ffff;display:flex;align-items:center;justify-content:center;max-height:80vh}
