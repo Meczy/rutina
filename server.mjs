@@ -9,6 +9,11 @@ const PORT = process.env.PORT || 3000;
 // Solo lo que esté dentro de ./public se sirve al navegador.
 const PUBLIC_DIR = path.resolve(import.meta.dirname, "public");
 
+// Etiqueta visible según el ambiente (definida en el .env de cada servidor).
+// Así el index.html queda igual en el repo para dev y producción, sin tener
+// que acordarse de revertir un "-DEV" a mano antes de cada deploy.
+const ENV_LABEL = process.env.APP_ENV === "dev" ? "-DEV" : "";
+
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
@@ -126,6 +131,16 @@ const server = http.createServer(async (req, res) => {
         mimeTypes[ext] || "application/octet-stream",
       "X-Content-Type-Options": "nosniff",
     });
+
+    if (ext === ".html") {
+      // Los .html son chicos: los leemos completos para poder sustituir
+      // el placeholder {{ENV_LABEL}} antes de mandarlos.
+      const contenido = fs
+        .readFileSync(filePath, "utf8")
+        .replaceAll("{{ENV_LABEL}}", ENV_LABEL);
+      res.end(contenido);
+      return;
+    }
 
     fs.createReadStream(filePath).pipe(res);
   } catch (error) {
