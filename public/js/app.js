@@ -40,9 +40,11 @@ const personaButton = document.getElementById("personaButton");
 const progresoButton = document.getElementById("progresoButton");
 const closeEditorButton = document.getElementById("closeEditor");
 const addDayButton = document.getElementById("addDay");
+const verCatalogoButton = document.getElementById("verCatalogoButton");
 const exportDataButton = document.getElementById("exportData");
 const exerciseForm = document.getElementById("exerciseForm");
 const formTitle = document.getElementById("formTitle");
+const exerciseFormNota = document.getElementById("exerciseFormNota");
 const exerciseName = document.getElementById("exerciseName");
 const exerciseSeries = document.getElementById("exerciseSeries");
 const exerciseReps = document.getElementById("exerciseReps");
@@ -53,7 +55,12 @@ const wgerPreview = document.getElementById("wgerPreview");
 const wgerPreviewImg = document.getElementById("wgerPreviewImg");
 const wgerPlaceholderIcon = document.getElementById("wgerPlaceholderIcon");
 const wgerAccionButton = document.getElementById("wgerAccionButton");
+const imagenArchivoInput = document.getElementById("imagenArchivoInput");
 const closeVideoButton = document.getElementById("close");
+const navToggle = document.getElementById("navToggle");
+const navLinks = document.getElementById("navLinks");
+const diasButton = document.getElementById("diasButton");
+const topnav = document.getElementById("topnav");
 
 function esc(value) {
   return String(value ?? "").replace(/[&<>"']/g, (m) => ({
@@ -169,7 +176,7 @@ async function registrarPeso(exercise) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "logWeight",
-        ejercicio_id: exercise.id,
+        catalogo_id: exercise.catalogoId,
         peso,
         fecha: fechaHoy()
       })
@@ -193,7 +200,7 @@ async function obtenerHistorialPeso(exercise, persona) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       action: "getWeightHistory",
-      ejercicio_id: exercise.id
+      catalogo_id: exercise.catalogoId
     })
   });
 
@@ -326,6 +333,8 @@ async function mostrarInfo() {
   content.hidden = true;
   infoSection.classList.add("active");
   progresoButton.classList.add("active");
+  diasButton.classList.remove("active");
+  cerrarMenuNav();
 
   document.querySelectorAll(".tab").forEach((item) => item.classList.remove("active"));
 
@@ -773,6 +782,7 @@ function render() {
   content.hidden = vista !== "dias";
   infoSection.classList.toggle("active", vista === "info");
   progresoButton.classList.toggle("active", vista === "info");
+  diasButton.classList.toggle("active", vista === "dias");
   actualizarPersonaButton();
 }
 
@@ -784,6 +794,8 @@ function showDay(index) {
   content.hidden = false;
   infoSection.classList.remove("active");
   progresoButton.classList.remove("active");
+  diasButton.classList.add("active");
+  cerrarMenuNav();
 
   const tabButtons = [...tabs.querySelectorAll(".tab")];
   tabButtons.forEach((item, i) => {
@@ -1008,7 +1020,7 @@ function renderEditor() {
   const addButton = document.createElement("button");
   addButton.className = "add-btn";
   addButton.textContent = "＋ Agregar ejercicio a este día";
-  addButton.addEventListener("click", () => openExerciseForm());
+  addButton.addEventListener("click", () => abrirSelectorCatalogo());
   editorList.appendChild(addButton);
 }
 
@@ -1099,8 +1111,30 @@ function openExerciseForm(exercise = null) {
   exerciseReps.value = exercise?.reps || "";
   exerciseUrl.value = exercise?.url || "";
   exerciseForm.dataset.exerciseId = exercise?.id ? String(exercise.id) : "";
+  exerciseForm.dataset.catalogoId = "";
   exerciseForm.dataset.imageUrl = exercise?.imageUrl || "";
   exerciseForm.dataset.wgerId = exercise?.wgerId ? String(exercise.wgerId) : "";
+  exerciseForm.classList.remove("modo-catalogo");
+  exerciseFormNota.hidden = !exercise;
+  actualizarWgerPreview();
+  exerciseForm.classList.add("open");
+}
+
+// Editar un ejercicio directamente desde el catálogo (fuera de un día
+// puntual): mismo formulario, pero sin series/repeticiones y guardando en
+// catalogoActualizar en vez de en la asignación a un día.
+function openCatalogoForm(item) {
+  formTitle.textContent = "Editar ejercicio del catálogo";
+  exerciseName.value = item.name || "";
+  exerciseSeries.value = "";
+  exerciseReps.value = "";
+  exerciseUrl.value = item.url || "";
+  exerciseForm.dataset.exerciseId = "";
+  exerciseForm.dataset.catalogoId = String(item.id);
+  exerciseForm.dataset.imageUrl = item.imageUrl || "";
+  exerciseForm.dataset.wgerId = item.wgerId ? String(item.wgerId) : "";
+  exerciseForm.classList.add("modo-catalogo");
+  exerciseFormNota.hidden = false;
   actualizarWgerPreview();
   exerciseForm.classList.add("open");
 }
@@ -1111,7 +1145,7 @@ function actualizarWgerPreview() {
     wgerPreviewImg.src = imagen;
     wgerPreviewImg.removeAttribute("hidden");
     wgerPlaceholderIcon.setAttribute("hidden", "");
-    wgerAccionButton.textContent = "Quitar imagen";
+    wgerAccionButton.textContent = "Eliminar imagen";
     wgerAccionButton.classList.add("danger");
   } else {
     wgerPreviewImg.src = "";
@@ -1122,18 +1156,284 @@ function actualizarWgerPreview() {
   }
 }
 
+// El mismo botón hace de "Cargar imagen" (abre el selector de archivos del
+// dispositivo) cuando no hay imagen, y de "Eliminar imagen" cuando ya hay
+// una cargada (ya sea elegida en wger o subida a mano).
 wgerAccionButton.addEventListener("click", () => {
   const tieneImagen = Boolean(exerciseForm.dataset.imageUrl);
   if (tieneImagen) {
     exerciseForm.dataset.imageUrl = "";
     exerciseForm.dataset.wgerId = "";
+    imagenArchivoInput.value = "";
     actualizarWgerPreview();
   } else {
-    buscarWgerButton.click();
+    imagenArchivoInput.click();
   }
 });
 
 buscarWgerButton.addEventListener("click", abrirBuscadorWger);
+
+// --- Subir una foto propia desde el celular/computadora (galería o cámara) ---
+
+imagenArchivoInput.addEventListener("change", async () => {
+  const archivo = imagenArchivoInput.files && imagenArchivoInput.files[0];
+  if (!archivo) return;
+
+  if (!archivo.type.startsWith("image/")) {
+    alert("Elegí un archivo de imagen.");
+    imagenArchivoInput.value = "";
+    return;
+  }
+
+  try {
+    const dataUrl = await comprimirImagen(archivo);
+    exerciseForm.dataset.imageUrl = dataUrl;
+    exerciseForm.dataset.wgerId = "";
+    actualizarWgerPreview();
+  } catch (error) {
+    alert("No se pudo cargar la imagen: " + error.message);
+  } finally {
+    imagenArchivoInput.value = "";
+  }
+});
+
+// Redimensiona/comprime la imagen elegida en el dispositivo antes de
+// guardarla, para no mandar fotos de varios MB al servidor.
+function comprimirImagen(archivo, maxLado = 800, calidad = 0.75) {
+  return new Promise((resolve, reject) => {
+    const lector = new FileReader();
+    lector.onerror = () => reject(new Error("No se pudo leer el archivo."));
+    lector.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("El archivo no es una imagen válida."));
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxLado || height > maxLado) {
+          if (width >= height) {
+            height = Math.round((height * maxLado) / width);
+            width = maxLado;
+          } else {
+            width = Math.round((width * maxLado) / height);
+            height = maxLado;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", calidad));
+      };
+      img.src = lector.result;
+    };
+    lector.readAsDataURL(archivo);
+  });
+}
+
+// --- Agregar ejercicio a un día: elegir uno ya existente del catálogo de
+// esta rutina (así el historial de peso queda compartido con los demás
+// días donde se use) o crear uno nuevo. ---
+
+async function abrirSelectorCatalogo() {
+  modalTitle.textContent = "Agregar ejercicio";
+  modal.querySelector(".modal-card").classList.remove("vertical");
+  modalBody.innerHTML = `<p class="footer-note" style="padding:16px">Cargando catálogo…</p>`;
+  modal.classList.add("open");
+
+  try {
+    const result = await api("catalogoListar");
+    renderSelectorCatalogo(result.catalogo || []);
+  } catch (error) {
+    modalBody.innerHTML = `
+      <div class="fallback" style="border-radius:16px">
+        <h3>No se pudo cargar</h3>
+        <p>${esc(error.message)}</p>
+      </div>
+    `;
+  }
+}
+
+function renderSelectorCatalogo(catalogo) {
+  modalBody.innerHTML = `
+    <div class="wger-buscador">
+      <button type="button" class="main-btn" id="crearEjercicioNuevoBtn" style="width:100%;justify-content:center;margin-bottom:12px">
+        ${icon("plus")} Crear ejercicio nuevo
+      </button>
+      <div class="wger-filtros">
+        <input type="text" id="catalogoTextoInput" placeholder="Buscar en tu catálogo">
+      </div>
+      <div id="catalogoResultados"></div>
+    </div>
+  `;
+
+  document.getElementById("crearEjercicioNuevoBtn").addEventListener("click", () => {
+    closeVideo();
+    openExerciseForm();
+  });
+
+  const textoInput = document.getElementById("catalogoTextoInput");
+  const pintar = () => {
+    const texto = textoInput.value.trim().toLowerCase();
+    const filtrados = texto
+      ? catalogo.filter((c) => c.name.toLowerCase().includes(texto))
+      : catalogo;
+    renderResultadosCatalogo(filtrados, catalogo);
+  };
+  textoInput.addEventListener("input", pintar);
+  pintar();
+}
+
+function renderResultadosCatalogo(filtrados, catalogoCompleto) {
+  const contenedor = document.getElementById("catalogoResultados");
+
+  if (!catalogoCompleto.length) {
+    contenedor.innerHTML = `<p class="footer-note">Todavía no tenés ejercicios en el catálogo. Creá el primero con el botón de arriba.</p>`;
+    return;
+  }
+
+  if (!filtrados.length) {
+    contenedor.innerHTML = `<p class="footer-note">Sin resultados para esa búsqueda.</p>`;
+    return;
+  }
+
+  contenedor.innerHTML = `
+    <div class="wger-grid">
+      ${filtrados
+        .map(
+          (c) => `
+            <button type="button" class="wger-card" data-catalogo-id="${c.id}">
+              ${c.imageUrl ? `<img src="${esc(c.imageUrl)}" alt="${esc(c.name)}" loading="lazy">` : `<div class="wger-card-sin-imagen">Sin imagen</div>`}
+              <span>${esc(c.name)}</span>
+            </button>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+
+  contenedor.querySelectorAll(".wger-card").forEach((card) => {
+    card.addEventListener("click", () => {
+      const item = catalogoCompleto.find((c) => String(c.id) === card.dataset.catalogoId);
+      if (item) abrirFormularioAsignacion(item);
+    });
+  });
+}
+
+function abrirFormularioAsignacion(item) {
+  modalTitle.textContent = item.name;
+  modalBody.innerHTML = `
+    <form id="asignarCatalogoForm" style="padding:16px;display:flex;flex-direction:column;gap:14px">
+      <div class="wger-preview">
+        <div class="wger-thumb">${item.imageUrl ? `<img src="${esc(item.imageUrl)}" alt="${esc(item.name)}">` : ""}</div>
+        <strong>${esc(item.name)}</strong>
+      </div>
+      <div class="field"><label>Series</label><input id="asignarSeries"></div>
+      <div class="field"><label>Repeticiones</label><input id="asignarReps"></div>
+      <div class="form-actions">
+        <button type="button" class="small" id="asignarCancelar">Cancelar</button>
+        <button type="submit" class="main-btn">Agregar al día</button>
+      </div>
+    </form>
+  `;
+
+  document.getElementById("asignarCancelar").addEventListener("click", closeVideo);
+
+  document.getElementById("asignarCatalogoForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const series = document.getElementById("asignarSeries").value.trim();
+    const repeticiones = document.getElementById("asignarReps").value.trim();
+    const day = rutina[selectedEditorDay];
+
+    try {
+      await api("createExercise", { dia_id: day.id, catalogo_id: item.id, series, repeticiones });
+      closeVideo();
+      await cargarRutina();
+      renderEditor();
+    } catch (error) {
+      alert(error.message);
+    }
+  });
+}
+
+// --- Gestión del catálogo: ver, editar y borrar ejercicios propios sin
+// pasar por ningún día en particular. ---
+
+verCatalogoButton.addEventListener("click", abrirGestionCatalogo);
+
+async function abrirGestionCatalogo() {
+  modalTitle.textContent = "Catálogo de ejercicios";
+  modal.querySelector(".modal-card").classList.remove("vertical");
+  modalBody.innerHTML = `<p class="footer-note" style="padding:16px">Cargando catálogo…</p>`;
+  modal.classList.add("open");
+
+  try {
+    const result = await api("catalogoListar");
+    renderGestionCatalogo(result.catalogo || []);
+  } catch (error) {
+    modalBody.innerHTML = `
+      <div class="fallback" style="border-radius:16px">
+        <h3>No se pudo cargar</h3>
+        <p>${esc(error.message)}</p>
+      </div>
+    `;
+  }
+}
+
+function renderGestionCatalogo(catalogo) {
+  if (!catalogo.length) {
+    modalBody.innerHTML = `<p class="footer-note" style="padding:16px">Todavía no tenés ejercicios en el catálogo.</p>`;
+    return;
+  }
+
+  modalBody.innerHTML = `
+    <div class="history-list" style="padding:16px">
+      ${catalogo
+        .map(
+          (c) => `
+            <div class="history-row" data-catalogo-id="${c.id}">
+              <div class="history-info">
+                <span class="history-fecha">${esc(c.name)}</span>
+                <span class="history-peso">${c.usos} día${c.usos === 1 ? "" : "s"}</span>
+              </div>
+              <div class="history-actions">
+                <button type="button" class="small catalogo-edit">${icon("pencil")} Editar</button>
+                <button type="button" class="small danger catalogo-delete">${icon("trash-2")} Eliminar</button>
+              </div>
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+
+  modalBody.querySelectorAll(".history-row").forEach((row) => {
+    const item = catalogo.find((c) => String(c.id) === row.dataset.catalogoId);
+    if (!item) return;
+
+    row.querySelector(".catalogo-edit").addEventListener("click", () => {
+      closeVideo();
+      openCatalogoForm(item);
+    });
+
+    row.querySelector(".catalogo-delete").addEventListener("click", async () => {
+      const advertencia =
+        item.usos > 0
+          ? ` Se usa en ${item.usos} día${item.usos === 1 ? "" : "s"}: al eliminarlo, desaparece de esos días junto con su historial de peso.`
+          : "";
+      if (!confirm(`¿Eliminar "${item.name}" del catálogo?${advertencia}`)) return;
+
+      try {
+        await api("catalogoEliminar", { id: item.id });
+        await cargarRutina();
+        renderEditor();
+        abrirGestionCatalogo();
+      } catch (error) {
+        alert(error.message);
+      }
+    });
+  });
+}
 
 async function abrirBuscadorWger() {
   modalTitle.textContent = "Buscar en la librería de ejercicios (wger)";
@@ -1243,7 +1543,9 @@ function editExercise(exercise) {
 }
 
 cancelExercise.addEventListener("click", () => {
-  exerciseForm.classList.remove("open");
+  exerciseForm.classList.remove("open", "modo-catalogo");
+  exerciseForm.dataset.exerciseId = "";
+  exerciseForm.dataset.catalogoId = "";
   exerciseForm.dataset.imageUrl = "";
   exerciseForm.dataset.wgerId = "";
   actualizarWgerPreview();
@@ -1253,6 +1555,7 @@ exerciseForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const exerciseId = Number(exerciseForm.dataset.exerciseId || 0);
+  const catalogoId = Number(exerciseForm.dataset.catalogoId || 0);
   const nombre = exerciseName.value.trim();
   const series = exerciseSeries.value.trim();
   const repeticiones = exerciseReps.value.trim();
@@ -1266,7 +1569,17 @@ exerciseForm.addEventListener("submit", async (event) => {
   }
 
   try {
-    if (exerciseId) {
+    if (catalogoId) {
+      // Editando el ejercicio desde el catálogo (no desde un día puntual):
+      // no hay series/repeticiones que guardar acá, esas son por día.
+      await api("catalogoActualizar", {
+        id: catalogoId,
+        nombre,
+        video_url: videoUrl,
+        image_url: imageUrl,
+        wger_id: wgerId
+      });
+    } else if (exerciseId) {
       await api("updateExercise", {
         id: exerciseId,
         nombre,
@@ -1291,8 +1604,10 @@ exerciseForm.addEventListener("submit", async (event) => {
 
     exerciseForm.classList.remove("open");
     exerciseForm.dataset.exerciseId = "";
+    exerciseForm.dataset.catalogoId = "";
     exerciseForm.dataset.imageUrl = "";
     exerciseForm.dataset.wgerId = "";
+    exerciseForm.classList.remove("modo-catalogo");
     actualizarWgerPreview();
     await cargarRutina();
     renderEditor();
@@ -1302,7 +1617,7 @@ exerciseForm.addEventListener("submit", async (event) => {
 });
 
 async function deleteExercise(exercise) {
-  if (!confirm(`¿Eliminar "${exercise.name}"?`)) return;
+  if (!confirm(`¿Quitar "${exercise.name}" de este día? (sigue en tu catálogo y en los demás días donde lo uses)`)) return;
 
   try {
     await api("deleteExercise", { id: exercise.id });
@@ -1350,9 +1665,42 @@ exportDataButton.addEventListener("click", () => {
   URL.revokeObjectURL(url);
 });
 
-editorButton.addEventListener("click", openEditor);
-personaButton.addEventListener("click", cerrarSesion);
+editorButton.addEventListener("click", () => {
+  openEditor();
+  cerrarMenuNav();
+});
+personaButton.addEventListener("click", () => {
+  cerrarMenuNav();
+  cerrarSesion();
+});
 progresoButton.addEventListener("click", mostrarInfo);
+diasButton.addEventListener("click", () => showDay(currentDayIndex));
+
+// --- Menú de navegación: hamburguesa en celular, barra normal en escritorio ---
+
+function abrirMenuNav() {
+  navLinks.classList.add("open");
+  navToggle.setAttribute("aria-expanded", "true");
+}
+
+function cerrarMenuNav() {
+  navLinks.classList.remove("open");
+  navToggle.setAttribute("aria-expanded", "false");
+}
+
+navToggle.addEventListener("click", () => {
+  if (navLinks.classList.contains("open")) {
+    cerrarMenuNav();
+  } else {
+    abrirMenuNav();
+  }
+});
+
+document.addEventListener("click", (event) => {
+  if (!navLinks.classList.contains("open")) return;
+  if (topnav.contains(event.target)) return;
+  cerrarMenuNav();
+});
 closeEditorButton.addEventListener("click", () => editor.classList.remove("open"));
 closeVideoButton.addEventListener("click", closeVideo);
 modal.addEventListener("click", (event) => {
