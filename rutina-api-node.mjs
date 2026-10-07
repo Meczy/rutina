@@ -17,22 +17,49 @@ const pool = new Pool({
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 
+function armarConsulta(strings, values) {
+  let text = "";
+
+  for (let i = 0; i < strings.length; i += 1) {
+    text += strings[i];
+
+    if (i < values.length) {
+      text += `$${i + 1}`;
+    }
+  }
+
+  return text;
+}
+
 const db = {
   sql: async (strings, ...values) => {
-    let text = "";
-
-    for (let i = 0; i < strings.length; i += 1) {
-      text += strings[i];
-
-      if (i < values.length) {
-        text += `$${i + 1}`;
-      }
-    }
-
-    const result = await pool.query(text, values);
+    const result = await pool.query(armarConsulta(strings, values), values);
     return result.rows;
   },
 };
+
+// Ejecuta fn dentro de una transacción: le pasa un sql`` equivalente a
+// db.sql pero sobre una misma conexión, y hace ROLLBACK si algo falla (así
+// una importación a medias no deja la rutina incompleta).
+async function enTransaccion(fn) {
+  const client = await pool.connect();
+  const sql = async (strings, ...values) => {
+    const result = await client.query(armarConsulta(strings, values), values);
+    return result.rows;
+  };
+
+  try {
+    await client.query("BEGIN");
+    const resultado = await fn(sql);
+    await client.query("COMMIT");
+    return resultado;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
 
 function respuesta(data, status = 200, extraHeaders = {}) {
   return Response.json(data, {
@@ -328,6 +355,122 @@ async function buscarDuplicadoEnCatalogo(rutinaId, nombre, excluirId = null) {
       AND id <> ${excluirId ?? -1}
   `;
   return filas.length ? { id: Number(filas[0].id), nombre: filas[0].nombre } : null;
+}
+
+// ---------- Importación de rutina (desde PDF, leído en el navegador) ----------
+
+const IMPORTAR_MAX_DIAS = 14;
+const IMPORTAR_MAX_EJERCICIOS = 40;
+
+function textoImportado(valor, maximo) {
+  return String(valor ?? "").replace(/\s+/g, " ").trim().slice(0, maximo);
+}
+
+// Valida y limpia lo que manda el frontend. Devuelve { dias } o { error }.
+function validarRutinaImportada(diasBody) {
+  if (!Array.isArray(diasBody) || !diasBody.length) {
+    return { error: "No se encontró ningún día para importar." };
+  }
+  if (diasBody.length > IMPORTAR_MAX_DIAS) {
+    return { error: `Se pueden importar como máximo ${IMPORTAR_MAX_DIAS} días.` };
+  }
+
+  const dias = [];
+
+  for (const [i, dia] of diasBody.entries()) {
+    const titulo = textoImportado(dia?.titulo, 120) || `Día ${i + 1}`;
+    const ejerciciosBody = Array.isArray(dia?.ejercicios) ? dia.ejercicios : [];
+
+    if (!ejerciciosBody.length) return { error: `"${titulo}" no tiene ejercicios.` };
+    if (ejerciciosBody.length > IMPORTAR_MAX_EJERCICIOS) {
+      return { error: `"${titulo}" tiene más de ${IMPORTAR_MAX_EJERCICIOS} ejercicios.` };
+    }
+
+    const ejercicios = [];
+    for (const ejercicio of ejerciciosBody) {
+      const nombre = textoImportado(ejercicio?.nombre, 150);
+      if (!nombre) return { error: `Hay un ejercicio sin nombre en "${titulo}".` };
+
+      let videoUrl = textoImportado(ejercicio?.video_url, 500);
+      if (videoUrl && !/^https?:\/\//i.test(videoUrl)) videoUrl = "";
+
+      ejercicios.push({
+        nombre,
+        series: textoImportado(ejercicio?.series, 30),
+        repeticiones: textoImportado(ejercicio?.repeticiones, 30),
+        videoUrl,
+      });
+    }
+
+    dias.push({ titulo, ejercicios });
+  }
+
+  return { dias };
+}
+
+// modo "reemplazar": borra los días actuales y deja solo los importados.
+// modo "agregar": suma los importados después de los días que ya hay.
+// En ambos casos los ejercicios se buscan por nombre en el catálogo de la
+// rutina: si ya existen se reutilizan (y se conserva su historial de peso),
+// actualizando el video si el PDF trae uno; si no, se crean.
+async function importarRutina(rutinaId, dias, modo) {
+  await enTransaccion(async (sql) => {
+    let numeroBase = 0;
+
+    if (modo === "reemplazar") {
+      await sql`DELETE FROM dias WHERE rutina_id = ${rutinaId}`;
+    } else {
+      const filas = await sql`SELECT COALESCE(MAX(numero), 0) AS maximo FROM dias WHERE rutina_id = ${rutinaId}`;
+      numeroBase = Number(filas[0].maximo);
+    }
+
+    const catalogoPorNombre = new Map();
+
+    for (const [i, dia] of dias.entries()) {
+      const numero = numeroBase + i + 1;
+      const diaRows = await sql`
+        INSERT INTO dias (numero, nombre, orden, rutina_id)
+        VALUES (${numero}, ${dia.titulo}, ${numero}, ${rutinaId})
+        RETURNING id
+      `;
+      const diaId = Number(diaRows[0].id);
+
+      for (const [j, ejercicio] of dia.ejercicios.entries()) {
+        const clave = ejercicio.nombre.toLowerCase();
+        let catalogoId = catalogoPorNombre.get(clave);
+
+        if (!catalogoId) {
+          const existente = await sql`
+            SELECT id FROM ejercicios_catalogo
+            WHERE rutina_id = ${rutinaId} AND LOWER(TRIM(nombre)) = ${clave}
+            ORDER BY id
+            LIMIT 1
+          `;
+
+          if (existente.length) {
+            catalogoId = Number(existente[0].id);
+            if (ejercicio.videoUrl) {
+              await sql`UPDATE ejercicios_catalogo SET video_url = ${ejercicio.videoUrl} WHERE id = ${catalogoId}`;
+            }
+          } else {
+            const nuevo = await sql`
+              INSERT INTO ejercicios_catalogo (rutina_id, nombre, video_url)
+              VALUES (${rutinaId}, ${ejercicio.nombre}, ${ejercicio.videoUrl})
+              RETURNING id
+            `;
+            catalogoId = Number(nuevo[0].id);
+          }
+
+          catalogoPorNombre.set(clave, catalogoId);
+        }
+
+        await sql`
+          INSERT INTO ejercicios (dia_id, catalogo_id, series, repeticiones, orden)
+          VALUES (${diaId}, ${catalogoId}, ${ejercicio.series}, ${ejercicio.repeticiones}, ${j + 1})
+        `;
+      }
+    }
+  });
 }
 
 // ---------- Rutina ----------
@@ -658,6 +801,15 @@ export default async (request) => {
       }
       await db.sql`DELETE FROM dias WHERE id = ${id}`;
       return respuesta({ ok: true, rutina: await obtenerRutina(rutinaId) });
+    }
+
+    if (action === "importarRutina") {
+      const modo = body.modo === "agregar" ? "agregar" : "reemplazar";
+      const validacion = validarRutinaImportada(body.dias);
+      if (validacion.error) return respuesta({ error: validacion.error }, 400);
+
+      await importarRutina(rutinaId, validacion.dias, modo);
+      return respuesta({ ok: true, rutina: await obtenerRutina(rutinaId) }, 201);
     }
 
     if (action === "createExercise") {

@@ -1411,6 +1411,17 @@ function abrirFormularioAsignacion(item) {
 
 verCatalogoButton.addEventListener("click", abrirGestionCatalogo);
 
+document.getElementById("importarPdfButton").addEventListener("click", () => {
+  abrirImportarPdf({
+    alTerminar: async () => {
+      selectedEditorDay = 0;
+      currentDayIndex = 0;
+      await cargarRutina();
+      renderEditor();
+    }
+  });
+});
+
 async function abrirGestionCatalogo() {
   modalTitle.textContent = "Catálogo de ejercicios";
   modal.querySelector(".modal-card").classList.remove("vertical");

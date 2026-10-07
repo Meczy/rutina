@@ -5,6 +5,7 @@ const APP_SHELL = [
   "/index.html",
   "/css/estilos.css",
   "/js/app.js",
+  "/js/importar-pdf.js",
   "/icons/sprite.svg",
   "/manifest.json",
   "/icons/icon-192.png",
