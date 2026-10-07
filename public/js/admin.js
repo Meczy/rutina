@@ -274,6 +274,17 @@
     }
   });
 
+  document.getElementById("adminImportarPdfBtn").addEventListener("click", () => {
+    abrirImportarPdf({
+      targetUsuarioId: usuarioSeleccionado.id,
+      alTerminar: (rutina) => {
+        rutinaSeleccionada = rutina;
+        selectedAdminDay = 0;
+        renderAdminEditor();
+      },
+    });
+  });
+
   adminCambiarRutinaBtn.addEventListener("click", async () => {
     await abrirAsignarRutina();
     renderAdminEditor();

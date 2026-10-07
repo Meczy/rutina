@@ -7,6 +7,7 @@
   },
   "devDependencies": {
     "drizzle-kit": "^1.0.0-beta.22",
-    "lucide-static": "^1.47.0"
+    "lucide-static": "^1.47.0",
+    "pdfjs-dist": "^3.11.174"
   }
 }
