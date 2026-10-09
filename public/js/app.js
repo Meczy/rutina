@@ -1,21 +1,5 @@
 const DONE_PREFIX = "mi-rutina-done-";
 
-// Íconos como SVG en línea (en vez de emojis) para los botones de
-// imagen/video en cada tarjeta de ejercicio.
-const ICON_IMAGE = `
-  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="3" y="3" width="18" height="18" rx="4"></rect>
-    <circle cx="8.5" cy="9.5" r="1.75" fill="currentColor" stroke="none"></circle>
-    <path d="M21 15.5l-5.5-5.5a2 2 0 0 0-2.8 0L4 19"></path>
-  </svg>
-`;
-
-const ICON_PLAY = `
-  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-    <path d="M8 5.14v13.72c0 .86.94 1.4 1.68.96l11.18-6.86a1.12 1.12 0 0 0 0-1.92L9.68 4.18C8.94 3.73 8 4.27 8 5.14z"></path>
-  </svg>
-`;
-
 let rutina = [];
 let misRutinas = []; // [{ id, nombre, activa, dias, compartidaCon }]
 let selectedEditorDay = 0;
@@ -79,7 +63,7 @@ function esc(value) {
 
 // Subir SPRITE_VERSION cada vez que se agreguen íconos a sprite.svg: así el
 // navegador baja el archivo nuevo en vez de usar la copia guardada.
-const SPRITE_VERSION = "2";
+const SPRITE_VERSION = "3";
 
 function icon(nombre, clase = "") {
   return `<svg class="icon ${clase}" aria-hidden="true"><use href="/icons/sprite.svg?v=${SPRITE_VERSION}#${nombre}"></use></svg>`;
@@ -1130,12 +1114,12 @@ function render() {
           <div class="actions">
             ${
               exercise.imageUrl
-                ? `<button type="button" class="icon-btn img-btn" title="Ver imagen">${ICON_IMAGE}<span>Imagen</span></button>`
+                ? `<button type="button" class="icon-btn img-btn" title="Ver imagen">${icon("image")}<span>Imagen</span></button>`
                 : ""
             }
             ${
               exercise.url
-                ? `<button type="button" class="icon-btn play ${platform}" title="Ver video">${ICON_PLAY}<span>Video</span></button>`
+                ? `<button type="button" class="icon-btn play ${platform}" title="Ver video">${icon("play", "icono-relleno")}<span>Video</span></button>`
                 : ""
             }
             ${
@@ -1146,7 +1130,7 @@ function render() {
           </div>
           <div class="weights">
             ${pesosHtml}
-            <button type="button" class="weight-add">+ peso</button>
+            <button type="button" class="weight-add">${icon("plus")} peso</button>
           </div>
         </div>
       `;
@@ -1289,7 +1273,7 @@ function renderEditor() {
   prevButton.type = "button";
   prevButton.className = "day-switcher-arrow";
   prevButton.setAttribute("aria-label", "Día anterior");
-  prevButton.textContent = "‹";
+  prevButton.innerHTML = icon("chevron-left");
   prevButton.disabled = selectedEditorDay === 0;
   prevButton.addEventListener("click", () => {
     if (selectedEditorDay > 0) {
@@ -1353,7 +1337,7 @@ function renderEditor() {
   nextButton.type = "button";
   nextButton.className = "day-switcher-arrow";
   nextButton.setAttribute("aria-label", "Día siguiente");
-  nextButton.textContent = "›";
+  nextButton.innerHTML = icon("chevron-right");
   nextButton.disabled = selectedEditorDay === rutina.length - 1;
   nextButton.addEventListener("click", () => {
     if (selectedEditorDay < rutina.length - 1) {
