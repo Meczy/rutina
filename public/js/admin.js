@@ -392,7 +392,7 @@
     const prevBtn = document.createElement("button");
     prevBtn.type = "button";
     prevBtn.className = "day-switcher-arrow";
-    prevBtn.textContent = "‹";
+    prevBtn.innerHTML = icon("chevron-left");
     prevBtn.disabled = selectedAdminDay === 0;
     prevBtn.addEventListener("click", () => {
       if (selectedAdminDay > 0) {
@@ -450,7 +450,7 @@
     const nextBtn = document.createElement("button");
     nextBtn.type = "button";
     nextBtn.className = "day-switcher-arrow";
-    nextBtn.textContent = "›";
+    nextBtn.innerHTML = icon("chevron-right");
     nextBtn.disabled = selectedAdminDay === rutinaSeleccionada.length - 1;
     nextBtn.addEventListener("click", () => {
       if (selectedAdminDay < rutinaSeleccionada.length - 1) {
