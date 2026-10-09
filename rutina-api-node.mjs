@@ -93,9 +93,12 @@ async function usuarioDesdeRequest(request) {
   };
 }
 
+// La rutina con la que el usuario entrena ahora (la activa). Si por algún
+// motivo ninguna está marcada, se usa la de menor id.
 async function rutinaIdDeUsuario(usuarioId) {
   const filas = await db.sql`
-    SELECT rutina_id FROM rutina_usuarios WHERE usuario_id = ${usuarioId} ORDER BY rutina_id LIMIT 1
+    SELECT rutina_id FROM rutina_usuarios WHERE usuario_id = ${usuarioId}
+    ORDER BY activa DESC, rutina_id LIMIT 1
   `;
   return filas.length ? Number(filas[0].rutina_id) : null;
 }
@@ -178,13 +181,13 @@ async function actividadPorSemana(usuarioIds, desde) {
   return (usuarioId, semana) => actividad.get(`${usuarioId}|${semana}`) || { dias: 0, ejercicios: 0 };
 }
 
-// Cantidad de días (con al menos un ejercicio) de la rutina de cada usuario.
+// Cantidad de días (con al menos un ejercicio) de la rutina activa de cada usuario.
 async function diasDeRutinaPorUsuario() {
   const filas = await db.sql`
     SELECT ru.usuario_id, COUNT(DISTINCT d.id)::int AS dias
     FROM rutina_usuarios ru
     JOIN dias d ON d.rutina_id = ru.rutina_id
-    WHERE EXISTS (SELECT 1 FROM ejercicios e WHERE e.dia_id = d.id)
+    WHERE ru.activa AND EXISTS (SELECT 1 FROM ejercicios e WHERE e.dia_id = d.id)
     GROUP BY ru.usuario_id
   `;
   return new Map(filas.map((f) => [Number(f.usuario_id), f.dias]));
@@ -193,7 +196,7 @@ async function diasDeRutinaPorUsuario() {
 async function crearRutinaPropia(usuarioId) {
   const rows = await db.sql`INSERT INTO rutinas (nombre) VALUES ('Mi rutina') RETURNING id`;
   const rutinaId = Number(rows[0].id);
-  await db.sql`INSERT INTO rutina_usuarios (rutina_id, usuario_id) VALUES (${rutinaId}, ${usuarioId})`;
+  await db.sql`INSERT INTO rutina_usuarios (rutina_id, usuario_id, activa) VALUES (${rutinaId}, ${usuarioId}, true)`;
   return rutinaId;
 }
 
@@ -224,15 +227,68 @@ const ACCIONES_ADMIN = new Set([
   "adminActividadUsuario",
 ]);
 
-// Cada usuario trabaja sobre una sola rutina (ver rutinaIdDeUsuario), así
-// que asignarle una reemplaza la que tenía en vez de sumar otra. La rutina
-// anterior no se borra: queda disponible para asignarla de nuevo por su ID.
-async function vincularUnicaRutina(sql, usuarioId, rutinaId) {
-  await sql`DELETE FROM rutina_usuarios WHERE usuario_id = ${usuarioId} AND rutina_id <> ${rutinaId}`;
+// ---------- Rutinas de cada usuario (varias, con una activa) ----------
+
+// Suma la rutina a las del usuario (si no la tenía) y la deja como activa.
+// Las demás rutinas del usuario no se tocan, solo dejan de estar activas.
+async function agregarYActivarRutina(sql, usuarioId, rutinaId) {
   await sql`
-    INSERT INTO rutina_usuarios (rutina_id, usuario_id) VALUES (${rutinaId}, ${usuarioId})
-    ON CONFLICT (rutina_id, usuario_id) DO NOTHING
+    UPDATE rutina_usuarios SET activa = false
+    WHERE usuario_id = ${usuarioId} AND activa AND rutina_id <> ${rutinaId}
   `;
+  await sql`
+    INSERT INTO rutina_usuarios (rutina_id, usuario_id, activa) VALUES (${rutinaId}, ${usuarioId}, true)
+    ON CONFLICT (rutina_id, usuario_id) DO UPDATE SET activa = true
+  `;
+}
+
+// Saca la rutina de las del usuario. Si era la activa, pasa a activa la de
+// menor id que le quede. La rutina en sí no se borra (otros pueden usarla,
+// y el admin puede volver a asignarla).
+async function quitarRutinaDeUsuario(sql, usuarioId, rutinaId) {
+  const quitadas = await sql`
+    DELETE FROM rutina_usuarios WHERE usuario_id = ${usuarioId} AND rutina_id = ${rutinaId}
+    RETURNING activa
+  `;
+  if (quitadas[0]?.activa) {
+    await sql`
+      UPDATE rutina_usuarios SET activa = true
+      WHERE usuario_id = ${usuarioId}
+        AND rutina_id = (SELECT MIN(rutina_id) FROM rutina_usuarios WHERE usuario_id = ${usuarioId})
+    `;
+  }
+}
+
+async function rutinasDeUsuario(usuarioId) {
+  const filas = await db.sql`
+    SELECT rt.id, rt.nombre, ru.activa,
+           (SELECT COUNT(*) FROM dias d WHERE d.rutina_id = rt.id)::int AS dias,
+           (SELECT json_agg(u.nombre ORDER BY u.nombre)
+              FROM rutina_usuarios ru2 JOIN usuarios u ON u.id = ru2.usuario_id
+              WHERE ru2.rutina_id = rt.id AND ru2.usuario_id <> ${usuarioId})::text AS otros
+    FROM rutina_usuarios ru
+    JOIN rutinas rt ON rt.id = ru.rutina_id
+    WHERE ru.usuario_id = ${usuarioId}
+    ORDER BY ru.activa DESC, rt.nombre, rt.id
+  `;
+  return filas.map((r) => ({
+    id: Number(r.id),
+    nombre: r.nombre,
+    activa: r.activa,
+    dias: r.dias,
+    compartidaCon: JSON.parse(r.otros || "[]"),
+  }));
+}
+
+async function usuarioTieneRutina(usuarioId, rutinaId) {
+  const filas = await db.sql`
+    SELECT 1 FROM rutina_usuarios WHERE usuario_id = ${usuarioId} AND rutina_id = ${rutinaId}
+  `;
+  return filas.length > 0;
+}
+
+function nombreDeRutina(valor) {
+  return String(valor ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
 }
 
 async function manejarAccionAdmin(action, body, usuarioActual) {
@@ -242,7 +298,8 @@ async function manejarAccionAdmin(action, body, usuarioActual) {
              COALESCE(r.rutinas, '[]') AS rutinas
       FROM usuarios u
       LEFT JOIN LATERAL (
-        SELECT json_agg(json_build_object('id', ru.rutina_id, 'nombre', rt.nombre))::text AS rutinas
+        SELECT json_agg(json_build_object('id', ru.rutina_id, 'nombre', rt.nombre, 'activa', ru.activa)
+                        ORDER BY ru.activa DESC, rt.nombre)::text AS rutinas
         FROM rutina_usuarios ru
         JOIN rutinas rt ON rt.id = ru.rutina_id
         WHERE ru.usuario_id = u.id
@@ -306,7 +363,7 @@ async function manejarAccionAdmin(action, body, usuarioActual) {
     const rutinaId = await enTransaccion(async (sql) => {
       const rows = await sql`INSERT INTO rutinas (nombre) VALUES (${nombre}) RETURNING id`;
       const nuevaId = Number(rows[0].id);
-      await vincularUnicaRutina(sql, targetId, nuevaId);
+      await agregarYActivarRutina(sql, targetId, nuevaId);
       return nuevaId;
     });
     return respuesta({ ok: true, rutinaId }, 201);
@@ -323,7 +380,7 @@ async function manejarAccionAdmin(action, body, usuarioActual) {
     const existeRutina = await db.sql`SELECT id FROM rutinas WHERE id = ${rutinaId}`;
     if (!existeRutina.length) return respuesta({ error: "Esa rutina no existe." }, 404);
 
-    await enTransaccion((sql) => vincularUnicaRutina(sql, targetId, rutinaId));
+    await enTransaccion((sql) => agregarYActivarRutina(sql, targetId, rutinaId));
     return respuesta({ ok: true });
   }
 
@@ -333,9 +390,7 @@ async function manejarAccionAdmin(action, body, usuarioActual) {
     if (!Number.isInteger(targetId) || !Number.isInteger(rutinaId)) {
       return respuesta({ error: "Datos inválidos." }, 400);
     }
-    await db.sql`
-      DELETE FROM rutina_usuarios WHERE rutina_id = ${rutinaId} AND usuario_id = ${targetId}
-    `;
+    await enTransaccion((sql) => quitarRutinaDeUsuario(sql, targetId, rutinaId));
     return respuesta({ ok: true });
   }
 
@@ -562,63 +617,65 @@ function validarRutinaImportada(diasBody) {
 // rutina: si ya existen se reutilizan (y se conserva su historial de peso),
 // actualizando el video si el PDF trae uno; si no, se crean.
 async function importarRutina(rutinaId, dias, modo) {
-  await enTransaccion(async (sql) => {
-    let numeroBase = 0;
+  await enTransaccion((sql) => importarEnRutina(sql, rutinaId, dias, modo));
+}
 
-    if (modo === "reemplazar") {
-      await sql`DELETE FROM dias WHERE rutina_id = ${rutinaId}`;
-    } else {
-      const filas = await sql`SELECT COALESCE(MAX(numero), 0) AS maximo FROM dias WHERE rutina_id = ${rutinaId}`;
-      numeroBase = Number(filas[0].maximo);
-    }
+async function importarEnRutina(sql, rutinaId, dias, modo) {
+  let numeroBase = 0;
 
-    const catalogoPorNombre = new Map();
+  if (modo === "reemplazar") {
+    await sql`DELETE FROM dias WHERE rutina_id = ${rutinaId}`;
+  } else {
+    const filas = await sql`SELECT COALESCE(MAX(numero), 0) AS maximo FROM dias WHERE rutina_id = ${rutinaId}`;
+    numeroBase = Number(filas[0].maximo);
+  }
 
-    for (const [i, dia] of dias.entries()) {
-      const numero = numeroBase + i + 1;
-      const diaRows = await sql`
-        INSERT INTO dias (numero, nombre, orden, rutina_id)
-        VALUES (${numero}, ${dia.titulo}, ${numero}, ${rutinaId})
-        RETURNING id
-      `;
-      const diaId = Number(diaRows[0].id);
+  const catalogoPorNombre = new Map();
 
-      for (const [j, ejercicio] of dia.ejercicios.entries()) {
-        const clave = ejercicio.nombre.toLowerCase();
-        let catalogoId = catalogoPorNombre.get(clave);
+  for (const [i, dia] of dias.entries()) {
+    const numero = numeroBase + i + 1;
+    const diaRows = await sql`
+      INSERT INTO dias (numero, nombre, orden, rutina_id)
+      VALUES (${numero}, ${dia.titulo}, ${numero}, ${rutinaId})
+      RETURNING id
+    `;
+    const diaId = Number(diaRows[0].id);
 
-        if (!catalogoId) {
-          const existente = await sql`
-            SELECT id FROM ejercicios_catalogo
-            WHERE rutina_id = ${rutinaId} AND LOWER(TRIM(nombre)) = ${clave}
-            ORDER BY id
-            LIMIT 1
-          `;
+    for (const [j, ejercicio] of dia.ejercicios.entries()) {
+      const clave = ejercicio.nombre.toLowerCase();
+      let catalogoId = catalogoPorNombre.get(clave);
 
-          if (existente.length) {
-            catalogoId = Number(existente[0].id);
-            if (ejercicio.videoUrl) {
-              await sql`UPDATE ejercicios_catalogo SET video_url = ${ejercicio.videoUrl} WHERE id = ${catalogoId}`;
-            }
-          } else {
-            const nuevo = await sql`
-              INSERT INTO ejercicios_catalogo (rutina_id, nombre, video_url)
-              VALUES (${rutinaId}, ${ejercicio.nombre}, ${ejercicio.videoUrl})
-              RETURNING id
-            `;
-            catalogoId = Number(nuevo[0].id);
+      if (!catalogoId) {
+        const existente = await sql`
+          SELECT id FROM ejercicios_catalogo
+          WHERE rutina_id = ${rutinaId} AND LOWER(TRIM(nombre)) = ${clave}
+          ORDER BY id
+          LIMIT 1
+        `;
+
+        if (existente.length) {
+          catalogoId = Number(existente[0].id);
+          if (ejercicio.videoUrl) {
+            await sql`UPDATE ejercicios_catalogo SET video_url = ${ejercicio.videoUrl} WHERE id = ${catalogoId}`;
           }
-
-          catalogoPorNombre.set(clave, catalogoId);
+        } else {
+          const nuevo = await sql`
+            INSERT INTO ejercicios_catalogo (rutina_id, nombre, video_url)
+            VALUES (${rutinaId}, ${ejercicio.nombre}, ${ejercicio.videoUrl})
+            RETURNING id
+          `;
+          catalogoId = Number(nuevo[0].id);
         }
 
-        await sql`
-          INSERT INTO ejercicios (dia_id, catalogo_id, series, repeticiones, orden)
-          VALUES (${diaId}, ${catalogoId}, ${ejercicio.series}, ${ejercicio.repeticiones}, ${j + 1})
-        `;
+        catalogoPorNombre.set(clave, catalogoId);
       }
+
+      await sql`
+        INSERT INTO ejercicios (dia_id, catalogo_id, series, repeticiones, orden)
+        VALUES (${diaId}, ${catalogoId}, ${ejercicio.series}, ${ejercicio.repeticiones}, ${j + 1})
+      `;
     }
-  });
+  }
 }
 
 // ---------- Marcas de "hecho" por semana ----------
@@ -661,15 +718,20 @@ async function obtenerRutina(rutinaId) {
   // Los pesos se guardan por ejercicio de catálogo (no por su aparición en
   // un día puntual), así que el mismo ejercicio usado en varios días
   // comparte un único historial de peso.
-  // El nombre se toma de la cuenta (no del texto guardado en el peso), así
-  // si alguien se cambia el nombre su historial sigue siendo uno solo.
+  // Último peso de cada persona que usa esta rutina. Los pesos se unen por
+  // nombre de ejercicio: si "Press Pierna" está en dos rutinas, se ve el
+  // último peso registrado en cualquiera de ellas. El nombre de la persona
+  // se toma de la cuenta (no del texto guardado en el peso).
   const pesos = catalogoIds.length
     ? await db.sql`
-      SELECT p.catalogo_id, p.usuario_id, u.nombre AS persona, p.peso, p.fecha
-      FROM pesos p
+      SELECT c.id AS catalogo_id, p.usuario_id, u.nombre AS persona, p.peso, p.fecha
+      FROM ejercicios_catalogo c
+      JOIN ejercicios_catalogo c2 ON LOWER(TRIM(c2.nombre)) = LOWER(TRIM(c.nombre))
+      JOIN pesos p ON p.catalogo_id = c2.id
+      JOIN rutina_usuarios ru ON ru.rutina_id = ${rutinaId} AND ru.usuario_id = p.usuario_id
       JOIN usuarios u ON u.id = p.usuario_id
-      WHERE p.catalogo_id = ANY(${catalogoIds})
-      ORDER BY p.catalogo_id, p.usuario_id, p.fecha DESC, p.created_at DESC
+      WHERE c.id = ANY(${catalogoIds})
+      ORDER BY c.id, p.usuario_id, p.fecha DESC, p.created_at DESC
     `
     : [];
 
@@ -747,6 +809,7 @@ export default async (request) => {
         ok: true,
         usuario: datosPublicosUsuario(usuario),
         rutina: rutinaId ? await obtenerRutina(rutinaId) : [],
+        rutinas: await rutinasDeUsuario(usuario.id),
         marcas: FECHA_RE.test(semana || "") ? await marcasDeSemana(usuario.id, semana) : [],
       });
     }
@@ -945,10 +1008,58 @@ export default async (request) => {
         return respuesta({ error: "Ya estás usando esa rutina." }, 400);
       }
 
-      // Reemplaza la rutina actual (la anterior queda guardada y el admin
-      // puede volver a asignarla).
-      await enTransaccion((sql) => vincularUnicaRutina(sql, usuarioObjetivo.id, nuevaRutinaId));
-      return respuesta({ ok: true, rutina: await obtenerRutina(nuevaRutinaId) });
+      // Se suma a tus rutinas y queda activa; las demás siguen en tu lista.
+      await enTransaccion((sql) => agregarYActivarRutina(sql, usuarioObjetivo.id, nuevaRutinaId));
+      return respuesta({ ok: true, rutinas: await rutinasDeUsuario(usuarioObjetivo.id) });
+    }
+
+    if (action === "misRutinas") {
+      return respuesta({ ok: true, rutinas: await rutinasDeUsuario(usuarioObjetivo.id) });
+    }
+
+    if (action === "activarRutina") {
+      const elegida = Number(body.rutina_id);
+      if (!Number.isInteger(elegida) || !(await usuarioTieneRutina(usuarioObjetivo.id, elegida))) {
+        return respuesta({ error: "Esa rutina no está en tu lista." }, 404);
+      }
+      await enTransaccion((sql) => agregarYActivarRutina(sql, usuarioObjetivo.id, elegida));
+      return respuesta({ ok: true, rutinas: await rutinasDeUsuario(usuarioObjetivo.id) });
+    }
+
+    if (action === "crearRutina") {
+      const nombre = nombreDeRutina(body.nombre) || "Mi rutina";
+      await enTransaccion(async (sql) => {
+        const filas = await sql`INSERT INTO rutinas (nombre) VALUES (${nombre}) RETURNING id`;
+        await agregarYActivarRutina(sql, usuarioObjetivo.id, Number(filas[0].id));
+      });
+      return respuesta({ ok: true, rutinas: await rutinasDeUsuario(usuarioObjetivo.id) }, 201);
+    }
+
+    if (action === "renombrarRutina") {
+      // Si la rutina es compartida, el nombre nuevo lo ven todos.
+      const elegida = Number(body.rutina_id);
+      const nombre = nombreDeRutina(body.nombre);
+      if (!nombre) return respuesta({ error: "Escribí un nombre para la rutina." }, 400);
+      if (!Number.isInteger(elegida) || !(await usuarioTieneRutina(usuarioObjetivo.id, elegida))) {
+        return respuesta({ error: "Esa rutina no está en tu lista." }, 404);
+      }
+      await db.sql`UPDATE rutinas SET nombre = ${nombre} WHERE id = ${elegida}`;
+      return respuesta({ ok: true, rutinas: await rutinasDeUsuario(usuarioObjetivo.id) });
+    }
+
+    if (action === "salirDeRutina") {
+      // No se puede quedar sin ninguna rutina. La rutina no se borra: si
+      // otros la usan la siguen usando, y el admin puede volver a asignarla.
+      const elegida = Number(body.rutina_id);
+      if (!Number.isInteger(elegida) || !(await usuarioTieneRutina(usuarioObjetivo.id, elegida))) {
+        return respuesta({ error: "Esa rutina no está en tu lista." }, 404);
+      }
+      const actuales = await rutinasDeUsuario(usuarioObjetivo.id);
+      if (actuales.length <= 1) {
+        return respuesta({ error: "Es tu única rutina: creá o agregá otra antes de salir de esta." }, 400);
+      }
+      await enTransaccion((sql) => quitarRutinaDeUsuario(sql, usuarioObjetivo.id, elegida));
+      return respuesta({ ok: true, rutinas: await rutinasDeUsuario(usuarioObjetivo.id) });
     }
 
     const rutinaId = await rutinaIdDeUsuario(usuarioObjetivo.id);
@@ -1056,9 +1167,23 @@ export default async (request) => {
     }
 
     if (action === "importarRutina") {
-      const modo = body.modo === "agregar" ? "agregar" : "reemplazar";
+      const modo = ["agregar", "nueva"].includes(body.modo) ? body.modo : "reemplazar";
       const validacion = validarRutinaImportada(body.dias);
       if (validacion.error) return respuesta({ error: validacion.error }, 400);
+
+      if (modo === "nueva") {
+        // Crea una rutina aparte con lo importado y la deja activa; la que
+        // tenía queda en su lista sin cambios.
+        const nombre = nombreDeRutina(body.nombre_rutina) || "Rutina importada";
+        const nuevaId = await enTransaccion(async (sql) => {
+          const filas = await sql`INSERT INTO rutinas (nombre) VALUES (${nombre}) RETURNING id`;
+          const id = Number(filas[0].id);
+          await agregarYActivarRutina(sql, usuarioObjetivo.id, id);
+          await importarEnRutina(sql, id, validacion.dias, "reemplazar");
+          return id;
+        });
+        return respuesta({ ok: true, rutina: await obtenerRutina(nuevaId) }, 201);
+      }
 
       await importarRutina(rutinaId, validacion.dias, modo);
       return respuesta({ ok: true, rutina: await obtenerRutina(rutinaId) }, 201);
@@ -1495,11 +1620,18 @@ export default async (request) => {
         return respuesta({ error: "Datos inválidos." }, 400);
       }
 
+      // Historial unido por nombre: incluye lo registrado en el mismo
+      // ejercicio en cualquier otra rutina.
+      if (!(await catalogoPerteneceARutina(catalogoId, rutinaId))) {
+        return respuesta({ error: "El ejercicio no existe." }, 404);
+      }
       const historial = await db.sql`
-        SELECT id, peso, fecha
-        FROM pesos
-        WHERE catalogo_id = ${catalogoId} AND usuario_id = ${usuarioObjetivo.id}
-        ORDER BY fecha DESC, created_at DESC
+        SELECT p.id, p.peso, p.fecha
+        FROM pesos p
+        JOIN ejercicios_catalogo c2 ON c2.id = p.catalogo_id
+        JOIN ejercicios_catalogo c ON c.id = ${catalogoId} AND LOWER(TRIM(c2.nombre)) = LOWER(TRIM(c.nombre))
+        WHERE p.usuario_id = ${usuarioObjetivo.id}
+        ORDER BY p.fecha DESC, p.created_at DESC
       `;
 
       return respuesta({

@@ -74,7 +74,14 @@
             <div class="stats">
                 <div class="stat"><strong id="totalDays">0</strong>Días</div>
                 <div class="stat"><strong id="totalExercises">0</strong>Ejercicios</div>
-                <div class="stat"><strong id="diasEntrenados">0/0</strong>Días entrenados esta semana</div>
+                <div class="stat" title="Días con todos sus ejercicios marcados esta semana"><strong id="diasEntrenados">0/0</strong>Días completados</div>
+            </div>
+            <div class="selector-rutina" id="selectorRutina" hidden>
+                <label for="rutinaActivaSelect">Rutina actual</label>
+                <div class="selector-rutina-fila">
+                    <select id="rutinaActivaSelect"></select>
+                    <button type="button" class="selector-rutina-btn" id="gestionarRutinasButton">Mis rutinas</button>
+                </div>
             </div>
         </header>
         <div class="tabs-wrap" id="tabsWrap">
@@ -189,7 +196,7 @@
             <div class="toolbar">
                 <button class="main-btn" id="adminAddDay"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#plus"></use></svg> Nuevo día</button>
                 <button class="small" id="adminImportarPdfBtn"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#upload"></use></svg> Importar PDF</button>
-                <button class="small" id="adminCambiarRutinaBtn">Crear/asignar otra rutina…</button>
+                <button class="small" id="adminCambiarRutinaBtn">Agregar o activar rutina…</button>
             </div>
             <div class="editor-tabs" id="adminEditorTabs"></div>
             <div id="adminEditorList"></div>

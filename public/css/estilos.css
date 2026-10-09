@@ -342,3 +342,40 @@ button{
 .peso-campo input{text-align:center;font-size:24px;font-weight:800;padding:10px 6px}
 .peso-campo span{font-weight:800;color:var(--muted)}
 .peso-paso{min-width:64px;padding:13px 10px;font-size:15px}
+
+/* ---------- Selector de rutina activa (encabezado) ---------- */
+/* Mismo estilo translúcido que los recuadros y el botón "Instalar app". */
+.selector-rutina{position:relative;z-index:1;margin-top:14px;max-width:520px}
+.selector-rutina label{display:block;margin:0 0 8px;color:rgba(255,255,255,.8)}
+.selector-rutina-fila{display:flex;gap:8px;align-items:stretch}
+.selector-rutina select{flex:1;min-width:0;max-width:360px;appearance:none;-webkit-appearance:none;padding:10px 36px 10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.32);background:rgba(255,255,255,.13) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center;color:#fff;font:inherit;font-weight:800;font-size:15px;text-overflow:ellipsis;backdrop-filter:blur(6px);cursor:pointer}
+.selector-rutina select:disabled{cursor:default;background-image:none;padding-right:12px;opacity:1}
+.selector-rutina select:focus-visible{outline:2px solid rgba(255,255,255,.7);outline-offset:2px}
+.selector-rutina select option{color:var(--ink);background:#fff}
+.selector-rutina-btn{flex:none;border:1px solid rgba(255,255,255,.32);background:rgba(255,255,255,.1);color:#fff;padding:10px 14px;border-radius:12px;font:inherit;font-weight:800;font-size:13px;cursor:pointer;white-space:nowrap;transition:background .2s var(--ease),transform .15s var(--ease)}
+.selector-rutina-btn:hover{background:rgba(255,255,255,.2)}
+.selector-rutina-btn:active{transform:scale(.96)}
+
+/* ---------- Mis rutinas (Mi cuenta) ---------- */
+.mis-rutinas{display:flex;flex-direction:column;gap:8px;margin:8px 0 12px}
+.mis-rutinas-item{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--line);border-radius:12px}
+.mis-rutinas-item.activa{border-color:var(--accent);background:#fff5f8}
+.mis-rutinas-item .meta{margin-top:2px;font-size:13px;color:var(--muted)}
+.mis-rutinas-acciones{display:flex;gap:6px;flex-wrap:wrap}
+.mis-rutinas-acciones .small{padding:7px 10px;font-size:13px}
+.etiqueta-activa{display:inline-block;margin-left:6px;padding:2px 8px;font-size:11px;font-weight:800;border-radius:999px;background:var(--accent);color:#fff;vertical-align:middle}
+#panelRutinas section + section{border-top:1px solid var(--line);padding-top:14px;margin-top:14px}
+
+/* Recuadros del encabezado: siempre los tres en la misma línea. */
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));max-width:520px}
+.stat{min-width:0}
+@media(max-width:520px){
+  .stats{gap:8px}
+  .stat{padding:9px 10px;font-size:12px;line-height:1.25}
+  .stat strong{font-size:18px}
+}
+
+/* Campos numéricos con botones − / + (Mi progreso). */
+.campo-pasos{display:flex;gap:8px;align-items:stretch}
+.campo-pasos input{flex:1;min-width:0;text-align:center;font-weight:800;font-size:17px}
+.campo-pasos-btn{flex:none;min-width:48px;font-size:20px;line-height:1;padding:0 12px}
