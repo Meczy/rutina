@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { Pool } from "pg";
 import {
   hashPassword,
@@ -105,7 +106,88 @@ async function crearSesion(usuarioId) {
   await db.sql`
     INSERT INTO sesiones (id, usuario_id, expires_at) VALUES (${token}, ${usuarioId}, ${expira})
   `;
+  await db.sql`UPDATE usuarios SET ultimo_uso = NOW() WHERE id = ${usuarioId}`;
   return token;
+}
+
+// ---------- Rutina compartida por código ----------
+
+// Sin letras/números que se confundan al dictarlo (0/O, 1/I/L).
+const CODIGO_LETRAS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+
+function generarCodigoRutina() {
+  return Array.from({ length: 6 }, () => CODIGO_LETRAS[crypto.randomInt(CODIGO_LETRAS.length)]).join("");
+}
+
+async function asignarCodigoNuevo(rutinaId) {
+  for (let intento = 0; intento < 5; intento += 1) {
+    const codigo = generarCodigoRutina();
+    const filas = await db.sql`
+      UPDATE rutinas SET codigo = ${codigo}
+      WHERE id = ${rutinaId} AND NOT EXISTS (SELECT 1 FROM rutinas WHERE codigo = ${codigo})
+      RETURNING codigo
+    `;
+    if (filas.length) return filas[0].codigo;
+  }
+  throw new Error("No se pudo generar un código para la rutina.");
+}
+
+async function datosRutinaCompartida(rutinaId, regenerar = false) {
+  const filas = await db.sql`SELECT codigo FROM rutinas WHERE id = ${rutinaId}`;
+  const codigo = !regenerar && filas[0]?.codigo ? filas[0].codigo : await asignarCodigoNuevo(rutinaId);
+  const miembros = await db.sql`
+    SELECT u.id, u.nombre FROM rutina_usuarios ru JOIN usuarios u ON u.id = ru.usuario_id
+    WHERE ru.rutina_id = ${rutinaId} ORDER BY u.nombre
+  `;
+  return { codigo, miembros: miembros.map((m) => ({ id: Number(m.id), nombre: m.nombre })) };
+}
+
+// ---------- Actividad (días entrenados por semana) ----------
+
+// Lunes de cada una de las `cantidad` semanas que terminan en `semana`
+// (incluida), de la más reciente a la más antigua.
+function semanasHacia(semana, cantidad) {
+  const base = new Date(`${semana}T00:00:00Z`);
+  return Array.from({ length: cantidad }, (_, i) => {
+    const d = new Date(base);
+    d.setUTCDate(d.getUTCDate() - 7 * i);
+    return d.toISOString().slice(0, 10);
+  });
+}
+
+// Por usuario y semana: días completos (todos sus ejercicios marcados) y
+// ejercicios marcados. Se compara contra los ejercicios que el día tiene hoy.
+async function actividadPorSemana(usuarioIds, desde) {
+  const filas = await db.sql`
+    SELECT m.usuario_id, m.semana::text AS semana, e.dia_id, COUNT(*)::int AS marcados,
+           (SELECT COUNT(*) FROM ejercicios e2 WHERE e2.dia_id = e.dia_id)::int AS total
+    FROM marcas_semana m
+    JOIN ejercicios e ON e.id = m.ejercicio_id
+    WHERE m.usuario_id = ANY(${usuarioIds}) AND m.semana >= ${desde}
+    GROUP BY m.usuario_id, m.semana, e.dia_id
+  `;
+
+  const actividad = new Map();
+  for (const f of filas) {
+    const clave = `${f.usuario_id}|${f.semana}`;
+    const item = actividad.get(clave) || { dias: 0, ejercicios: 0 };
+    item.ejercicios += f.marcados;
+    if (f.marcados >= f.total) item.dias += 1;
+    actividad.set(clave, item);
+  }
+  return (usuarioId, semana) => actividad.get(`${usuarioId}|${semana}`) || { dias: 0, ejercicios: 0 };
+}
+
+// Cantidad de días (con al menos un ejercicio) de la rutina de cada usuario.
+async function diasDeRutinaPorUsuario() {
+  const filas = await db.sql`
+    SELECT ru.usuario_id, COUNT(DISTINCT d.id)::int AS dias
+    FROM rutina_usuarios ru
+    JOIN dias d ON d.rutina_id = ru.rutina_id
+    WHERE EXISTS (SELECT 1 FROM ejercicios e WHERE e.dia_id = d.id)
+    GROUP BY ru.usuario_id
+  `;
+  return new Map(filas.map((f) => [Number(f.usuario_id), f.dias]));
 }
 
 async function crearRutinaPropia(usuarioId) {
@@ -139,6 +221,7 @@ const ACCIONES_ADMIN = new Set([
   "adminHistorialPesosUsuario",
   "adminHistorialMetricasUsuario",
   "adminPasswordTemporal",
+  "adminActividadUsuario",
 ]);
 
 // Cada usuario trabaja sobre una sola rutina (ver rutinaIdDeUsuario), así
@@ -155,7 +238,7 @@ async function vincularUnicaRutina(sql, usuarioId, rutinaId) {
 async function manejarAccionAdmin(action, body, usuarioActual) {
   if (action === "adminListarUsuarios") {
     const usuarios = await db.sql`
-      SELECT u.id, u.email, u.nombre, u.rol, u.created_at,
+      SELECT u.id, u.email, u.nombre, u.rol, u.created_at, u.ultimo_uso,
              COALESCE(r.rutinas, '[]') AS rutinas
       FROM usuarios u
       LEFT JOIN LATERAL (
@@ -166,6 +249,13 @@ async function manejarAccionAdmin(action, body, usuarioActual) {
       ) r ON true
       ORDER BY u.nombre
     `;
+
+    // La semana la manda el navegador (lunes en su hora local).
+    const semana = FECHA_RE.test(String(body.semana ?? "")) ? String(body.semana) : null;
+    const ids = usuarios.map((u) => Number(u.id));
+    const actividad = semana ? await actividadPorSemana(ids, semana) : null;
+    const diasRutina = await diasDeRutinaPorUsuario();
+
     return respuesta({
       ok: true,
       usuarios: usuarios.map((u) => ({
@@ -174,6 +264,9 @@ async function manejarAccionAdmin(action, body, usuarioActual) {
         nombre: u.nombre,
         rol: u.rol,
         creadoEn: u.created_at,
+        ultimoUso: u.ultimo_uso,
+        diasRutina: diasRutina.get(Number(u.id)) || 0,
+        diasEntrenadosSemana: actividad ? actividad(Number(u.id), semana).dias : null,
         rutinas: JSON.parse(u.rutinas || "[]"),
       })),
     });
@@ -289,6 +382,26 @@ async function manejarAccionAdmin(action, body, usuarioActual) {
         fecha: h.fecha,
         ejercicio: h.ejercicio,
       })),
+    });
+  }
+
+  if (action === "adminActividadUsuario") {
+    const targetId = Number(body.target_usuario_id);
+    const semana = String(body.semana ?? "");
+    if (!Number.isInteger(targetId) || !FECHA_RE.test(semana)) {
+      return respuesta({ error: "Datos inválidos." }, 400);
+    }
+
+    const semanas = semanasHacia(semana, 8);
+    const actividad = await actividadPorSemana([targetId], semanas[semanas.length - 1]);
+    const filas = await db.sql`SELECT ultimo_uso FROM usuarios WHERE id = ${targetId}`;
+    if (!filas.length) return respuesta({ error: "Ese usuario no existe." }, 404);
+
+    return respuesta({
+      ok: true,
+      ultimoUso: filas[0].ultimo_uso,
+      diasRutina: (await diasDeRutinaPorUsuario()).get(targetId) || 0,
+      semanas: semanas.map((s) => ({ semana: s, ...actividad(targetId, s) })),
     });
   }
 
@@ -623,6 +736,11 @@ export default async (request) => {
         });
       }
 
+      await db.sql`
+        UPDATE usuarios SET ultimo_uso = NOW()
+        WHERE id = ${usuario.id} AND (ultimo_uso IS NULL OR ultimo_uso < NOW() - INTERVAL '5 minutes')
+      `;
+
       const rutinaId = await rutinaIdDeUsuario(usuario.id);
       const semana = url.searchParams.get("semana");
       return respuesta({
@@ -758,6 +876,16 @@ export default async (request) => {
     const usuario = await usuarioDesdeRequest(request);
     if (!usuario) return respuesta({ ok: false, error: "No autorizado." }, 401);
 
+    if (action === "actualizarPerfil") {
+      // Los pesos y métricas van por usuario_id, así que cambiar el nombre
+      // no parte el historial: en todos lados se muestra el nombre nuevo.
+      const nombre = String(body.nombre ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
+      if (!nombre) return respuesta({ error: "Escribí tu nombre." }, 400);
+
+      await db.sql`UPDATE usuarios SET nombre = ${nombre} WHERE id = ${usuario.id}`;
+      return respuesta({ ok: true, usuario: datosPublicosUsuario({ ...usuario, nombre }) });
+    }
+
     if (action === "cambiarPassword") {
       // Las cuentas creadas solo con Google no tienen contraseña: pueden
       // crear una sin indicar la actual.
@@ -802,6 +930,25 @@ export default async (request) => {
       };
     } else if (usuario.rol === "admin") {
       return respuesta({ error: "Falta indicar sobre qué usuario operar." }, 400);
+    }
+
+    if (action === "unirseARutina") {
+      // El código se escribe a mano: se ignoran mayúsculas, espacios y guiones.
+      const codigo = String(body.codigo ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      if (!codigo) return respuesta({ error: "Escribí el código de la rutina." }, 400);
+
+      const filas = await db.sql`SELECT id FROM rutinas WHERE codigo = ${codigo}`;
+      if (!filas.length) return respuesta({ error: "No existe ninguna rutina con ese código." }, 404);
+      const nuevaRutinaId = Number(filas[0].id);
+
+      if (nuevaRutinaId === (await rutinaIdDeUsuario(usuarioObjetivo.id))) {
+        return respuesta({ error: "Ya estás usando esa rutina." }, 400);
+      }
+
+      // Reemplaza la rutina actual (la anterior queda guardada y el admin
+      // puede volver a asignarla).
+      await enTransaccion((sql) => vincularUnicaRutina(sql, usuarioObjetivo.id, nuevaRutinaId));
+      return respuesta({ ok: true, rutina: await obtenerRutina(nuevaRutinaId) });
     }
 
     const rutinaId = await rutinaIdDeUsuario(usuarioObjetivo.id);
@@ -876,6 +1023,11 @@ export default async (request) => {
       }
       await db.sql`DELETE FROM dias WHERE id = ${id}`;
       return respuesta({ ok: true, rutina: await obtenerRutina(rutinaId) });
+    }
+
+    if (action === "rutinaCompartida" || action === "regenerarCodigoRutina") {
+      const datos = await datosRutinaCompartida(rutinaId, action === "regenerarCodigoRutina");
+      return respuesta({ ok: true, ...datos });
     }
 
     if (action === "marcarEjercicio") {
