@@ -146,9 +146,46 @@ function textoDeColumna(fila, columnas, clave) {
     .trim();
 }
 
+// Solo se acepta el formato de rutina del entrenador. Estas son sus marcas:
+// datos del cliente arriba, bloques "Día N: …" que terminan en
+// FIN_ENTRENAMIENTO, y tablas con estas columnas ("Reps" no se exige
+// porque en algunas tablas falta ese encabezado).
+const COLUMNAS_OBLIGATORIAS = ["video", "series", "descanso", "observaciones"];
+const NOMBRES_COLUMNAS = { video: "Video", series: "Series", descanso: "Descanso", observaciones: "Observaciones" };
+
+function validarFormatoEntrenador(marcas, dias) {
+  const faltantes = [];
+  if (!marcas.cliente) faltantes.push('"Nombre de Cliente"');
+  if (!marcas.numeroEntrenamientos) faltantes.push('"Número de entrenamientos"');
+  if (!marcas.titulosDia) faltantes.push('días con el título "Día 1: …"');
+  if (!marcas.finEntrenamiento) faltantes.push('el cierre "FIN_ENTRENAMIENTO" de cada día');
+  if (!marcas.encabezados) faltantes.push("la tabla de ejercicios");
+  if (marcas.columnasFaltantes.size) {
+    faltantes.push(`las columnas ${[...marcas.columnasFaltantes].map((c) => NOMBRES_COLUMNAS[c]).join(", ")}`);
+  }
+
+  const sinSeries = dias.flatMap((d) => d.ejercicios).filter((e) => !e.series);
+  if (sinSeries.length) faltantes.push(`las series de ${sinSeries.length} ejercicio${sinSeries.length === 1 ? "" : "s"}`);
+
+  if (faltantes.length) {
+    throw new Error(
+      "Este PDF no tiene el formato de rutina que acepta MecFit, así que no se puede importar. " +
+        `Le falta: ${faltantes.join("; ")}.`
+    );
+  }
+}
+
 async function extraerRutinaDeDocumento(doc) {
   const filas = await filasDelPdf(doc);
   const dias = [];
+  const marcas = {
+    cliente: false,
+    numeroEntrenamientos: false,
+    titulosDia: 0,
+    finEntrenamiento: 0,
+    encabezados: 0,
+    columnasFaltantes: new Set(),
+  };
 
   let columnas = null;
   let tituloPendiente = null;
@@ -157,14 +194,19 @@ async function extraerRutinaDeDocumento(doc) {
   for (const fila of filas) {
     const normalizadas = fila.celdas.map((c) => normalizarTextoPdf(c.texto));
 
+    if (normalizadas.some((t) => t.startsWith("nombre de cliente"))) marcas.cliente = true;
+    if (normalizadas.some((t) => t.startsWith("numero de entrenamientos"))) marcas.numeroEntrenamientos = true;
+
     const celdaDia = fila.celdas.find((c) => /^d[ií]a\s*\d+/i.test(c.texto));
     if (celdaDia) {
+      marcas.titulosDia += 1;
       tituloPendiente = celdaDia.texto.replace(/^d[ií]a\s*\d+\s*[:.\-–]?\s*/i, "").trim();
       diaActual = null;
       continue;
     }
 
     if (normalizadas.some((t) => t.startsWith("fin_entrenamiento"))) {
+      marcas.finEntrenamiento += 1;
       diaActual = null;
       continue;
     }
@@ -177,6 +219,8 @@ async function extraerRutinaDeDocumento(doc) {
     }
 
     if (normalizadas.includes("video") && normalizadas.includes("series")) {
+      marcas.encabezados += 1;
+      COLUMNAS_OBLIGATORIAS.filter((c) => !normalizadas.includes(c)).forEach((c) => marcas.columnasFaltantes.add(c));
       columnas = columnasDeEncabezado(fila, columnas);
 
       const primeraCelda = fila.celdas[0].texto;
@@ -209,7 +253,9 @@ async function extraerRutinaDeDocumento(doc) {
     });
   }
 
-  return dias.filter((d) => d.ejercicios.length);
+  const conEjercicios = dias.filter((d) => d.ejercicios.length);
+  validarFormatoEntrenador(marcas, conEjercicios);
+  return conEjercicios;
 }
 
 async function leerRutinaDePdf(archivo) {
@@ -238,7 +284,9 @@ function abrirImportarPdf(opciones = {}) {
   modalBody.innerHTML = `
     <div style="padding:16px">
       <p class="footer-note" style="margin:0 0 12px;text-align:left">
-        Elegí el PDF de tu rutina. Antes de guardar vas a ver los días y ejercicios que se encontraron.
+        Elegí el PDF de tu rutina. Solo se aceptan rutinas con el formato del entrenador
+        (bloques "Día N" con la tabla Ejercicio, Video, Series, Reps, Descanso y Observaciones).
+        Antes de guardar vas a ver los días y ejercicios que se encontraron.
       </p>
       <input type="file" id="importarPdfInput" accept="application/pdf,.pdf">
       <div id="importarPdfResultado" style="margin-top:14px"></div>
@@ -258,7 +306,9 @@ function abrirImportarPdf(opciones = {}) {
     try {
       const dias = await leerRutinaDePdf(archivo);
       if (!dias.length) {
-        throw new Error("No se encontraron días con ejercicios en este PDF.");
+        throw new Error(
+          "Este PDF no tiene el formato de rutina que acepta MecFit: no se encontraron días con ejercicios."
+        );
       }
       renderVistaPreviaPdf(resultado, dias, { ...opciones, nombreArchivo: archivo.name });
     } catch (error) {
