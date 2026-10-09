@@ -2,8 +2,9 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 
 const ICONOS = [
   "dumbbell", "user", "chart-column", "pencil", "download",
-  "x", "plus", "users", "save", "trash-2", "search",
-  "grip-vertical", "chevron-up", "chevron-down", "share", "menu", "upload", "minus"
+  "x", "plus", "minus", "save", "trash-2", "search",
+  "chevron-up", "chevron-down", "chevron-left", "chevron-right",
+  "arrow-left", "menu", "upload", "image", "play"
 ];
 
 const symbols = ICONOS.map((nombre) => {
