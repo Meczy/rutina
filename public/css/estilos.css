@@ -282,6 +282,18 @@ button{
 #authForm .main-btn{width:100%;margin-top:4px;border:none;padding:12px;border-radius:var(--radius-sm);font-size:15px;font-weight:800;cursor:pointer}
 
 /* ---------- Panel de administración ---------- */
+/* Secciones del panel: bloque normal (no la grilla de .card, que es la de
+   las tarjetas de ejercicio y aplastaba el contenido en una columna de 42px). */
+.admin-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-md);padding:16px;margin-bottom:14px;box-shadow:0 6px 20px rgba(16,24,40,.045);min-width:0}
+.admin-card .tabs-wrap{position:static;background:none;padding:0;margin:12px 0}
+.admin-asignar{padding:16px;display:flex;flex-direction:column;gap:12px}
+.admin-asignar-lista{display:flex;flex-direction:column;gap:8px;max-height:55vh;overflow-y:auto}
+.admin-asignar-opcion{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:12px;cursor:pointer}
+.admin-asignar-opcion:has(input[type="radio"]:checked){border-color:var(--accent);background:#fff5f8}
+.admin-asignar-opcion input[type="radio"]{margin-top:3px;flex:none}
+.admin-asignar-opcion > span{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1}
+.admin-asignar-detalle{font-size:13px;color:var(--muted)}
+.admin-asignar-opcion input[type="text"]{width:100%;padding:9px 11px;border:1px solid #d0d5dd;border-radius:10px;font:inherit}
 .admin-lista-usuarios{display:flex;flex-direction:column;gap:12px;margin-top:10px}
 .admin-user-card{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center;
   padding:14px;border:1px solid var(--line);border-radius:var(--radius-1,14px);background:var(--card)}
