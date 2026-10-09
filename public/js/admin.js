@@ -223,7 +223,7 @@
                   (d) => `
                 <div class="admin-ejercicio-row">
                   <div>
-                    <div class="name" style="font-size:15px">Día ${esc(String(d.numero))} — ${esc(d.nombre)}</div>
+                    <div class="name" style="font-size:15px">Día ${esc(String(d.numero))} — ${esc(d.titulo)}</div>
                     <div class="meta">${d.ejercicios.length} ejercicio${d.ejercicios.length === 1 ? "" : "s"}</div>
                   </div>
                 </div>`
@@ -324,7 +324,7 @@
     trigger.type = "button";
     trigger.className = "day-switcher-select";
     trigger.innerHTML = `<span class="day-switcher-select-num">Día ${esc(String(diaActual.numero))}</span>
-      <span class="day-switcher-select-title">${esc(diaActual.nombre)}</span>`;
+      <span class="day-switcher-select-title">${esc(diaActual.titulo)}</span>`;
 
     const menu = document.createElement("div");
     menu.className = "day-switcher-menu";
@@ -343,7 +343,7 @@
       item.type = "button";
       item.className = "day-switcher-menu-item" + (index === selectedAdminDay ? " active" : "");
       item.innerHTML = `<span class="day-switcher-menu-num">Día ${esc(String(dia.numero))}</span>
-        <span class="day-switcher-menu-title">${esc(dia.nombre)}</span>`;
+        <span class="day-switcher-menu-title">${esc(dia.titulo)}</span>`;
       item.addEventListener("click", () => {
         closeMenu();
         selectedAdminDay = index;
@@ -389,7 +389,7 @@
         </div>
         <div class="day-name-edit">
           <label>Nombre</label>
-          <input id="adminDayNameInput" value="${esc(diaActual.nombre)}">
+          <input id="adminDayNameInput" value="${esc(diaActual.titulo)}">
         </div>
         <div class="day-actions">
           <button class="small icon-only" id="adminSaveDayBtn" title="Guardar día" aria-label="Guardar día">${icon("save")}</button>
@@ -525,33 +525,103 @@
     }
   }
 
+  // Formulario en el modal (en vez de prompt(), que en el celular se ve
+  // mal o ni aparece). Asignar una rutina reemplaza la que el usuario tenía.
   async function abrirAsignarRutina() {
+    const usuario = usuarioSeleccionado;
+    modalTitle.textContent = `Rutina de ${usuario.nombre}`;
+    modal.querySelector(".modal-card").classList.remove("vertical");
+    modalBody.innerHTML = `<p class="footer-note" style="padding:16px">Cargando rutinas…</p>`;
+    modal.classList.add("open");
+
+    let rutinas;
     try {
-      const result = await api("adminListarRutinas");
-      const rutinas = result.rutinas || [];
-      const listado = rutinas
-        .map((r) => `${r.id}: ${r.nombre} (usuarios: ${r.usuarios.map((u) => u.nombre).join(", ") || "ninguno"})`)
-        .join("\n");
-
-      const eleccion = prompt(
-        `Rutinas existentes:\n${listado || "(no hay ninguna todavía)"}\n\n` +
-          `Escribí el ID de una rutina para asignársela a ${usuarioSeleccionado.nombre}, ` +
-          `o dejá vacío y aceptá para crearle una rutina nueva en blanco.`
-      );
-      if (eleccion === null) return;
-
-      if (eleccion.trim() === "") {
-        const nombreNueva = prompt("Nombre de la nueva rutina:", "Mi rutina") || "Mi rutina";
-        await api("adminCrearRutina", { target_usuario_id: usuarioSeleccionado.id, nombre: nombreNueva });
-      } else {
-        const rutinaId = Number(eleccion);
-        if (!Number.isInteger(rutinaId)) return alert("ID inválido.");
-        await api("adminAsignarRutina", { target_usuario_id: usuarioSeleccionado.id, rutina_id: rutinaId });
-      }
-      await cargarRutinaUsuario();
+      rutinas = (await api("adminListarRutinas")).rutinas || [];
     } catch (error) {
-      alert(error.message);
+      modalBody.innerHTML = `<p class="auth-error" style="margin:16px">${esc(error.message)}</p>`;
+      return;
     }
+
+    const actual = rutinas.find((r) => r.usuarios.some((u) => u.id === usuario.id));
+
+    modalBody.innerHTML = `
+      <form id="asignarRutinaForm" class="admin-asignar">
+        <p class="footer-note" style="margin:0;text-align:left">
+          Elegí la rutina que va a usar ${esc(usuario.nombre)}. Reemplaza la que tiene ahora
+          (esa no se borra: queda en la lista para asignarla de nuevo).
+        </p>
+        <div class="admin-asignar-lista">
+          ${rutinas
+            .map(
+              (r) => `
+                <label class="admin-asignar-opcion">
+                  <input type="radio" name="rutinaElegida" value="${r.id}" ${actual && actual.id === r.id ? "checked" : ""}>
+                  <span>
+                    <strong>#${r.id} · ${esc(r.nombre)}</strong>${actual && actual.id === r.id ? " <em>(actual)</em>" : ""}
+                    <span class="admin-asignar-detalle">Usuarios: ${esc(r.usuarios.map((u) => u.nombre).join(", ") || "ninguno")}</span>
+                  </span>
+                </label>
+              `
+            )
+            .join("")}
+          <label class="admin-asignar-opcion">
+            <input type="radio" name="rutinaElegida" value="nueva" ${rutinas.length ? "" : "checked"}>
+            <span>
+              <strong>Crear una rutina nueva en blanco</strong>
+              <input type="text" id="asignarNombreNueva" placeholder="Nombre de la rutina" value="Mi rutina">
+            </span>
+          </label>
+        </div>
+        <p class="auth-error" id="asignarRutinaError" hidden></p>
+        <div class="form-actions">
+          <button type="button" class="small" id="asignarRutinaCancelar">Cancelar</button>
+          <button type="submit" class="main-btn" id="asignarRutinaGuardar">Guardar</button>
+        </div>
+      </form>
+    `;
+
+    const form = document.getElementById("asignarRutinaForm");
+    const errorEl = document.getElementById("asignarRutinaError");
+    const guardarBtn = document.getElementById("asignarRutinaGuardar");
+    const nombreNuevaInput = document.getElementById("asignarNombreNueva");
+
+    nombreNuevaInput.addEventListener("focus", () => {
+      form.querySelector('input[value="nueva"]').checked = true;
+    });
+    document.getElementById("asignarRutinaCancelar").addEventListener("click", closeVideo);
+
+    return new Promise((resolve) => {
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const elegida = form.querySelector('input[name="rutinaElegida"]:checked');
+        errorEl.hidden = true;
+
+        if (!elegida) {
+          errorEl.textContent = "Elegí una rutina.";
+          errorEl.hidden = false;
+          return;
+        }
+
+        guardarBtn.disabled = true;
+        try {
+          if (elegida.value === "nueva") {
+            const nombre = nombreNuevaInput.value.trim() || "Mi rutina";
+            await api("adminCrearRutina", { target_usuario_id: usuario.id, nombre });
+          } else {
+            await api("adminAsignarRutina", { target_usuario_id: usuario.id, rutina_id: Number(elegida.value) });
+          }
+          closeVideo();
+          selectedAdminDay = 0;
+          await cargarRutinaUsuario();
+          cargarUsuarios();
+          resolve(true);
+        } catch (error) {
+          errorEl.textContent = error.message;
+          errorEl.hidden = false;
+          guardarBtn.disabled = false;
+        }
+      });
+    });
   }
 
   // ---------- Pesos y métricas (solo lectura) ----------

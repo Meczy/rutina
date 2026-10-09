@@ -92,7 +92,7 @@ async function usuarioDesdeRequest(request) {
 
 async function rutinaIdDeUsuario(usuarioId) {
   const filas = await db.sql`
-    SELECT rutina_id FROM rutina_usuarios WHERE usuario_id = ${usuarioId} LIMIT 1
+    SELECT rutina_id FROM rutina_usuarios WHERE usuario_id = ${usuarioId} ORDER BY rutina_id LIMIT 1
   `;
   return filas.length ? Number(filas[0].rutina_id) : null;
 }
@@ -135,6 +135,17 @@ const ACCIONES_ADMIN = new Set([
   "adminHistorialPesosUsuario",
   "adminHistorialMetricasUsuario",
 ]);
+
+// Cada usuario trabaja sobre una sola rutina (ver rutinaIdDeUsuario), así
+// que asignarle una reemplaza la que tenía en vez de sumar otra. La rutina
+// anterior no se borra: queda disponible para asignarla de nuevo por su ID.
+async function vincularUnicaRutina(sql, usuarioId, rutinaId) {
+  await sql`DELETE FROM rutina_usuarios WHERE usuario_id = ${usuarioId} AND rutina_id <> ${rutinaId}`;
+  await sql`
+    INSERT INTO rutina_usuarios (rutina_id, usuario_id) VALUES (${rutinaId}, ${usuarioId})
+    ON CONFLICT (rutina_id, usuario_id) DO NOTHING
+  `;
+}
 
 async function manejarAccionAdmin(action, body, usuarioActual) {
   if (action === "adminListarUsuarios") {
@@ -194,12 +205,12 @@ async function manejarAccionAdmin(action, body, usuarioActual) {
     const existeUsuario = await db.sql`SELECT id FROM usuarios WHERE id = ${targetId}`;
     if (!existeUsuario.length) return respuesta({ error: "Ese usuario no existe." }, 404);
 
-    const rows = await db.sql`INSERT INTO rutinas (nombre) VALUES (${nombre}) RETURNING id`;
-    const rutinaId = Number(rows[0].id);
-    await db.sql`
-      INSERT INTO rutina_usuarios (rutina_id, usuario_id) VALUES (${rutinaId}, ${targetId})
-      ON CONFLICT (rutina_id, usuario_id) DO NOTHING
-    `;
+    const rutinaId = await enTransaccion(async (sql) => {
+      const rows = await sql`INSERT INTO rutinas (nombre) VALUES (${nombre}) RETURNING id`;
+      const nuevaId = Number(rows[0].id);
+      await vincularUnicaRutina(sql, targetId, nuevaId);
+      return nuevaId;
+    });
     return respuesta({ ok: true, rutinaId }, 201);
   }
 
@@ -209,13 +220,12 @@ async function manejarAccionAdmin(action, body, usuarioActual) {
     if (!Number.isInteger(targetId) || !Number.isInteger(rutinaId)) {
       return respuesta({ error: "Datos inválidos." }, 400);
     }
+    const existeUsuario = await db.sql`SELECT id FROM usuarios WHERE id = ${targetId}`;
+    if (!existeUsuario.length) return respuesta({ error: "Ese usuario no existe." }, 404);
     const existeRutina = await db.sql`SELECT id FROM rutinas WHERE id = ${rutinaId}`;
     if (!existeRutina.length) return respuesta({ error: "Esa rutina no existe." }, 404);
 
-    await db.sql`
-      INSERT INTO rutina_usuarios (rutina_id, usuario_id) VALUES (${rutinaId}, ${targetId})
-      ON CONFLICT (rutina_id, usuario_id) DO NOTHING
-    `;
+    await enTransaccion((sql) => vincularUnicaRutina(sql, targetId, rutinaId));
     return respuesta({ ok: true });
   }
 
