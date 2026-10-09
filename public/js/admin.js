@@ -261,6 +261,8 @@
   const adminExerciseName = document.getElementById("adminExerciseName");
   const adminExerciseSeries = document.getElementById("adminExerciseSeries");
   const adminExerciseReps = document.getElementById("adminExerciseReps");
+  const adminExerciseDescanso = document.getElementById("adminExerciseDescanso");
+  const adminExerciseObservaciones = document.getElementById("adminExerciseObservaciones");
   const adminExerciseUrl = document.getElementById("adminExerciseUrl");
   const adminCancelExerciseBtn = document.getElementById("adminCancelExercise");
 
@@ -559,6 +561,8 @@
     adminExerciseName.value = ejercicio?.name || "";
     adminExerciseSeries.value = ejercicio?.series || "";
     adminExerciseReps.value = ejercicio?.reps || "";
+    adminExerciseDescanso.value = ejercicio?.descanso || "";
+    adminExerciseObservaciones.value = ejercicio?.observaciones || "";
     adminExerciseUrl.value = ejercicio?.url || "";
     adminExerciseForm.classList.add("open");
   }
@@ -577,18 +581,30 @@
     const nombre = adminExerciseName.value.trim();
     const series = adminExerciseSeries.value.trim();
     const repeticiones = adminExerciseReps.value.trim();
+    const descanso = adminExerciseDescanso.value.trim();
+    const observaciones = adminExerciseObservaciones.value.trim();
     const videoUrl = adminExerciseUrl.value.trim();
 
     if (!nombre) return avisar("Escribí el nombre del ejercicio.");
 
     const dia = rutinaSeleccionada[selectedAdminDay];
     const ok = exerciseId
-      ? await accionAdminRutina("updateExercise", { id: exerciseId, nombre, series, repeticiones, video_url: videoUrl })
+      ? await accionAdminRutina("updateExercise", {
+          id: exerciseId,
+          nombre,
+          series,
+          repeticiones,
+          descanso,
+          observaciones,
+          video_url: videoUrl,
+        })
       : await accionAdminRutina("createExercise", {
           dia_id: dia.id,
           nombre,
           series,
           repeticiones,
+          descanso,
+          observaciones,
           video_url: videoUrl,
         });
 

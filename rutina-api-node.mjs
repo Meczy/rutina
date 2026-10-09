@@ -607,6 +607,8 @@ function validarRutinaImportada(diasBody) {
         nombre,
         series: textoImportado(ejercicio?.series, 30),
         repeticiones: textoImportado(ejercicio?.repeticiones, 30),
+        descanso: textoImportado(ejercicio?.descanso, 40),
+        observaciones: textoImportado(ejercicio?.observaciones, 300),
         videoUrl,
       });
     }
@@ -677,8 +679,9 @@ async function importarEnRutina(sql, rutinaId, dias, modo) {
       }
 
       await sql`
-        INSERT INTO ejercicios (dia_id, catalogo_id, series, repeticiones, orden)
-        VALUES (${diaId}, ${catalogoId}, ${ejercicio.series}, ${ejercicio.repeticiones}, ${j + 1})
+        INSERT INTO ejercicios (dia_id, catalogo_id, series, repeticiones, descanso, observaciones, orden)
+        VALUES (${diaId}, ${catalogoId}, ${ejercicio.series}, ${ejercicio.repeticiones},
+                ${ejercicio.descanso || null}, ${ejercicio.observaciones || null}, ${j + 1})
       `;
     }
   }
@@ -696,6 +699,13 @@ async function marcasDeSemana(usuarioId, semana) {
   return filas.map((f) => Number(f.ejercicio_id));
 }
 
+// Notas del entrenador de un ejercicio (descanso y observaciones).
+// Devuelve null si el campo no vino en el body, para no pisar lo guardado.
+function notaDelBody(body, campo, maximo) {
+  if (!(campo in body)) return null;
+  return String(body[campo] ?? "").replace(/\s+/g, " ").trim().slice(0, maximo);
+}
+
 // ---------- Rutina ----------
 
 async function obtenerRutina(rutinaId) {
@@ -710,7 +720,7 @@ async function obtenerRutina(rutinaId) {
 
   const ejercicios = diaIds.length
     ? await db.sql`
-      SELECT e.id, e.dia_id, e.series, e.repeticiones, e.orden,
+      SELECT e.id, e.dia_id, e.series, e.repeticiones, e.descanso, e.observaciones, e.orden,
              c.id AS catalogo_id, c.nombre, c.video_url, c.image_url, c.wger_id
       FROM ejercicios e
       JOIN ejercicios_catalogo c ON c.id = e.catalogo_id
@@ -755,6 +765,8 @@ async function obtenerRutina(rutinaId) {
         name: e.nombre,
         series: e.series ?? "",
         reps: e.repeticiones ?? "",
+        descanso: e.descanso ?? "",
+        observaciones: e.observaciones ?? "",
         url: e.video_url ?? "",
         imageUrl: e.image_url ?? "",
         wgerId: e.wger_id === null || e.wger_id === undefined ? null : Number(e.wger_id),
@@ -1256,8 +1268,9 @@ export default async (request) => {
       const orden = Number(maxRows[0].maximo) + 1;
 
       const rows = await db.sql`
-        INSERT INTO ejercicios (dia_id, catalogo_id, series, repeticiones, orden)
-        VALUES (${diaId}, ${catalogoId}, ${series}, ${repeticiones}, ${orden})
+        INSERT INTO ejercicios (dia_id, catalogo_id, series, repeticiones, descanso, observaciones, orden)
+        VALUES (${diaId}, ${catalogoId}, ${series}, ${repeticiones},
+                ${notaDelBody(body, "descanso", 40) || null}, ${notaDelBody(body, "observaciones", 300) || null}, ${orden})
         RETURNING id
       `;
 
@@ -1287,6 +1300,17 @@ export default async (request) => {
         SET series = ${series}, repeticiones = ${repeticiones}
         WHERE id = ${id}
       `;
+
+      // Las notas solo se tocan si vienen en el body (así un formulario que
+      // no las maneja no las borra).
+      const descanso = notaDelBody(body, "descanso", 40);
+      const observaciones = notaDelBody(body, "observaciones", 300);
+      if (descanso !== null) {
+        await db.sql`UPDATE ejercicios SET descanso = ${descanso || null} WHERE id = ${id}`;
+      }
+      if (observaciones !== null) {
+        await db.sql`UPDATE ejercicios SET observaciones = ${observaciones || null} WHERE id = ${id}`;
+      }
 
       const nombre = String(body.nombre ?? "").trim();
       if (nombre) {
