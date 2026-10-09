@@ -376,6 +376,10 @@ button{
 }
 
 /* Campos numéricos con botones − / + (Mi progreso). */
-.campo-pasos{display:flex;gap:8px;align-items:stretch}
-.campo-pasos input{flex:1;min-width:0;text-align:center;font-weight:800;font-size:17px}
-.campo-pasos-btn{flex:none;min-width:48px;font-size:20px;line-height:1;padding:0 12px}
+/* Mismo alto para botones y campo, así quedan alineados. */
+.campo-pasos{display:grid;grid-template-columns:36px minmax(0,1fr) 36px;gap:8px;align-items:center}
+.metrica-card .campo-pasos input,.campo-pasos input{height:40px;margin:0;text-align:center;font-weight:800;font-size:16px;padding:0 8px}
+.campo-pasos-btn{height:36px;width:36px;display:grid;place-items:center;padding:0;border:1px solid var(--line);border-radius:10px;background:var(--soft);color:var(--accent2);cursor:pointer;transition:background .2s var(--ease),transform .15s var(--ease)}
+.campo-pasos-btn:hover{background:#ffd0e1}
+.campo-pasos-btn:active{transform:scale(.94)}
+.campo-pasos-btn .icon{width:16px;height:16px;stroke-width:2.5}

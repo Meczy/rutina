@@ -77,8 +77,12 @@ function esc(value) {
   }[m]));
 }
 
+// Subir SPRITE_VERSION cada vez que se agreguen íconos a sprite.svg: así el
+// navegador baja el archivo nuevo en vez de usar la copia guardada.
+const SPRITE_VERSION = "2";
+
 function icon(nombre, clase = "") {
-  return `<svg class="icon ${clase}" aria-hidden="true"><use href="/icons/sprite.svg#${nombre}"></use></svg>`;
+  return `<svg class="icon ${clase}" aria-hidden="true"><use href="/icons/sprite.svg?v=${SPRITE_VERSION}#${nombre}"></use></svg>`;
 }
 
 // --- Diálogos propios (en vez de alert/confirm/prompt del navegador, que en
@@ -255,9 +259,9 @@ function pedirPeso({ titulo, detalle = "", valor = "" }) {
 function campoConPasos(id, { paso = 0.1, maximo = 999, requerido = false } = {}) {
   return `
     <div class="campo-pasos" data-paso="${paso}" data-maximo="${maximo}">
-      <button type="button" class="small campo-pasos-btn" data-direccion="-1" aria-label="Restar ${paso}">−</button>
+      <button type="button" class="campo-pasos-btn" data-direccion="-1" aria-label="Restar ${paso}">${icon("minus")}</button>
       <input id="${id}" inputmode="decimal" autocomplete="off" ${requerido ? "required" : ""}>
-      <button type="button" class="small campo-pasos-btn" data-direccion="1" aria-label="Sumar ${paso}">+</button>
+      <button type="button" class="campo-pasos-btn" data-direccion="1" aria-label="Sumar ${paso}">${icon("plus")}</button>
     </div>
   `;
 }
