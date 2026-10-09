@@ -288,7 +288,22 @@ button{
 .admin-card .tabs-wrap{position:static;background:none;padding:0;margin:12px 0}
 .mi-cuenta{padding:16px;display:flex;flex-direction:column;gap:16px}
 .mi-cuenta form .field{margin:8px 0}
+.mi-cuenta-encabezado{display:flex;align-items:center;gap:12px}
+.mi-cuenta-avatar{width:44px;height:44px;flex:none;border-radius:50%;display:grid;place-items:center;background:var(--soft);color:var(--accent)}
+.mi-cuenta-tabs{padding-bottom:2px}
+.mi-cuenta-tabs .tab{padding:9px 14px;font-size:14px}
+.mi-cuenta-panel{border:1px solid var(--line);border-radius:var(--radius-md);padding:14px}
+.mi-cuenta-subtitulo{margin:0 0 4px;font-size:15px}
+#unirseRutinaForm{border-top:1px solid var(--line);padding-top:14px}
+.mi-cuenta-salir{width:100%}
+.codigo-rutina{display:flex;align-items:center;gap:10px;margin:10px 0 6px}
+.codigo-rutina strong{font-size:26px;letter-spacing:.18em;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--soft);padding:6px 12px;border-radius:12px}
 .auth-error.ok{color:#067647;background:#ecfdf3;border-color:#abefc6}
+.admin-actividad{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+.admin-actividad-fila{display:grid;grid-template-columns:minmax(110px,auto) 1fr auto;gap:10px;align-items:center;font-size:14px}
+.admin-actividad-barra{height:10px;background:#f2f4f7;border-radius:999px;overflow:hidden}
+.admin-actividad-barra span{display:block;height:100%;background:var(--accent);border-radius:999px}
+@media(max-width:520px){.admin-actividad-fila{grid-template-columns:1fr auto}.admin-actividad-barra{grid-column:1/-1;grid-row:2}}
 .admin-asignar{padding:16px;display:flex;flex-direction:column;gap:12px}
 .admin-asignar-lista{display:flex;flex-direction:column;gap:8px;max-height:55vh;overflow-y:auto}
 .admin-asignar-opcion{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:12px;cursor:pointer}
@@ -311,3 +326,19 @@ button{
 .admin-tabla{display:flex;flex-direction:column;gap:6px;margin-top:10px}
 .admin-tabla-fila{display:flex;gap:16px;flex-wrap:wrap;padding:8px 10px;border:1px solid var(--line);
   border-radius:10px;font-size:14px}
+
+/* ---------- Diálogos propios (reemplazan alert/confirm/prompt) ---------- */
+.dialogo{position:fixed;inset:0;z-index:300;background:rgba(2,6,23,.6);display:flex;align-items:center;justify-content:center;padding:18px;padding-bottom:calc(18px + env(safe-area-inset-bottom))}
+.dialogo[hidden]{display:none}
+.dialogo-card{background:#fff;border-radius:18px;padding:18px;width:min(420px,100%);max-height:90vh;overflow:auto;box-shadow:0 30px 70px rgba(0,0,0,.35);animation:fadeIn .15s var(--ease)}
+.dialogo-titulo{margin:0 0 8px;font-size:18px}
+.dialogo-mensaje{display:block;margin:0 0 12px;white-space:pre-line;line-height:1.4}
+.dialogo-input{width:100%;padding:11px 12px;border:1px solid #d0d5dd;border-radius:12px;font:inherit;font-size:16px}
+.dialogo .form-actions{margin-top:14px}
+.main-btn.peligro{background:#d92d20;box-shadow:0 6px 16px rgba(217,45,32,.28)}
+.main-btn.peligro:hover{background:#b42318}
+.peso-control{display:flex;gap:8px;align-items:center}
+.peso-campo{flex:1;display:flex;align-items:center;gap:6px;min-width:0}
+.peso-campo input{text-align:center;font-size:24px;font-weight:800;padding:10px 6px}
+.peso-campo span{font-weight:800;color:var(--muted)}
+.peso-paso{min-width:64px;padding:13px 10px;font-size:15px}

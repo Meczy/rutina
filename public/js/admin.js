@@ -13,6 +13,7 @@
   const tabRutina = document.getElementById("adminTabRutina");
   const tabPesos = document.getElementById("adminTabPesos");
   const tabMetricas = document.getElementById("adminTabMetricas");
+  const tabActividad = document.getElementById("adminTabActividad");
 
   let usuarios = [];
   let usuarioSeleccionado = null; // { id, nombre, email, rol }
@@ -27,12 +28,25 @@
     }
   }
 
+  // "hace 5 min", "hace 3 h", "hace 2 días" o la fecha si pasó más de una semana.
+  function fmtHace(f) {
+    if (!f) return "nunca";
+    const minutos = Math.floor((Date.now() - new Date(f).getTime()) / 60000);
+    if (minutos < 1) return "recién";
+    if (minutos < 60) return `hace ${minutos} min`;
+    const horas = Math.floor(minutos / 60);
+    if (horas < 24) return `hace ${horas} h`;
+    const dias = Math.floor(horas / 24);
+    if (dias < 7) return `hace ${dias} día${dias === 1 ? "" : "s"}`;
+    return fmtFecha(f);
+  }
+
   // ---------- Lista de usuarios ----------
 
   async function cargarUsuarios() {
     listaUsuariosEl.innerHTML = `<div class="meta">Cargando usuarios…</div>`;
     try {
-      const result = await api("adminListarUsuarios");
+      const result = await api("adminListarUsuarios", { semana: inicioSemana() });
       usuarios = result.usuarios || [];
       renderUsuarios();
     } catch (error) {
@@ -57,7 +71,12 @@
               <div class="name">${esc(u.nombre)} ${u.rol === "admin" ? '<span class="admin-badge">admin</span>' : ""}</div>
               <div class="meta">${esc(u.email)}</div>
               <div class="meta">Rutinas: ${rutinasTxt}</div>
-              <div class="meta">Registrado: ${fmtFecha(u.creadoEn)}</div>
+              <div class="meta">Registrado: ${fmtFecha(u.creadoEn)} · Último uso: ${fmtHace(u.ultimoUso)}</div>
+              ${
+                u.rol !== "admin" && u.diasEntrenadosSemana !== null
+                  ? `<div class="meta">Esta semana: ${u.diasEntrenadosSemana}/${u.diasRutina} días entrenados</div>`
+                  : ""
+              }
             </div>
             <div class="admin-user-actions">
               <button type="button" class="small" data-admin-ver="${u.id}">Ver</button>
@@ -150,7 +169,7 @@
     const usuario = usuarios.find((u) => u.id === id);
     if (rol === "admin") {
       const tieneDatos = usuario && usuario.rutinas.length > 0;
-      const ok = confirm(
+      const ok = await confirmar(
         `¿Convertir a ${usuario ? usuario.nombre : "este usuario"} en administrador?\n\n` +
           `Ojo: un admin no ve su propia rutina, solo el panel de administración. ` +
           (tieneDatos
@@ -164,15 +183,16 @@
       await api("adminCambiarRol", { target_usuario_id: id, rol });
       await cargarUsuarios();
     } catch (error) {
-      alert(error.message);
+      avisar(error.message);
     }
   }
 
   async function eliminarUsuario(id) {
     const usuario = usuarios.find((u) => u.id === id);
     const nombre = usuario ? usuario.nombre : "este usuario";
-    const ok = confirm(
-      `¿Eliminar a ${nombre}? Esto borra su cuenta, su sesión y su historial de pesos y métricas. Esta acción no se puede deshacer.`
+    const ok = await confirmar(
+      `¿Eliminar a ${nombre}? Esto borra su cuenta, su sesión y su historial de pesos y métricas. Esta acción no se puede deshacer.`,
+      { textoAceptar: "Eliminar usuario", peligro: true }
     );
     if (!ok) return;
 
@@ -180,7 +200,7 @@
       await api("adminEliminarUsuario", { target_usuario_id: id });
       await cargarUsuarios();
     } catch (error) {
-      alert(error.message);
+      avisar(error.message);
     }
   }
 
@@ -196,7 +216,12 @@
     seccionDetalle.hidden = false;
 
     cambiarTabAdmin("rutina");
-    await Promise.all([cargarRutinaUsuario(), cargarPesosUsuario(), cargarMetricasUsuario()]);
+    await Promise.all([
+      cargarRutinaUsuario(),
+      cargarPesosUsuario(),
+      cargarMetricasUsuario(),
+      cargarActividadUsuario(),
+    ]);
   }
 
   volverBtn.addEventListener("click", () => {
@@ -217,6 +242,7 @@
     tabRutina.hidden = tab !== "rutina";
     tabPesos.hidden = tab !== "pesos";
     tabMetricas.hidden = tab !== "metricas";
+    tabActividad.hidden = tab !== "actividad";
   }
 
   // ---------- Rutina del usuario seleccionado ----------
@@ -302,7 +328,7 @@
       else await cargarRutinaUsuario();
       return true;
     } catch (error) {
-      alert(error.message);
+      avisar(error.message);
       return false;
     }
   }
@@ -459,8 +485,8 @@
     document.getElementById("adminSaveDayBtn").addEventListener("click", async () => {
       const numero = Number(document.getElementById("adminDayNumberInput").value);
       const nombre = document.getElementById("adminDayNameInput").value.trim();
-      if (!Number.isInteger(numero) || numero < 1) return alert("El número del día debe ser un entero mayor a 0.");
-      if (!nombre) return alert("Escribí un nombre para el día.");
+      if (!Number.isInteger(numero) || numero < 1) return avisar("El número del día debe ser un entero mayor a 0.");
+      if (!nombre) return avisar("Escribí un nombre para el día.");
       const ok = await accionAdminRutina("updateDay", { id: diaActual.id, numero, nombre });
       if (ok) {
         selectedAdminDay = Math.max(0, rutinaSeleccionada.findIndex((d) => Number(d.numero) === numero));
@@ -469,8 +495,8 @@
     });
 
     document.getElementById("adminDeleteDayBtn").addEventListener("click", async () => {
-      if (rutinaSeleccionada.length === 1) return alert("Debe existir al menos un día.");
-      if (!confirm(`¿Eliminar el Día ${diaActual.numero} y todos sus ejercicios?`)) return;
+      if (rutinaSeleccionada.length === 1) return avisar("Debe existir al menos un día.");
+      if (!(await confirmar(`¿Eliminar el Día ${diaActual.numero} y todos sus ejercicios?`, { textoAceptar: "Eliminar día", peligro: true }))) return;
       const ok = await accionAdminRutina("deleteDay", { id: diaActual.id });
       if (ok) {
         selectedAdminDay = Math.min(selectedAdminDay, rutinaSeleccionada.length - 1);
@@ -553,7 +579,7 @@
     const repeticiones = adminExerciseReps.value.trim();
     const videoUrl = adminExerciseUrl.value.trim();
 
-    if (!nombre) return alert("Escribí el nombre del ejercicio.");
+    if (!nombre) return avisar("Escribí el nombre del ejercicio.");
 
     const dia = rutinaSeleccionada[selectedAdminDay];
     const ok = exerciseId
@@ -574,7 +600,7 @@
   });
 
   async function borrarEjercicioAdmin(ejercicio) {
-    if (!confirm(`¿Borrar "${ejercicio.name}"?`)) return;
+    if (!(await confirmar(`¿Quitar "${ejercicio.name}" de este día?`, { textoAceptar: "Quitar", peligro: true }))) return;
     const ok = await accionAdminRutina("deleteExercise", { id: ejercicio.id });
     if (ok) {
       await cargarRutinaUsuario();
@@ -679,6 +705,39 @@
         }
       });
     });
+  }
+
+  // ---------- Actividad: días entrenados en las últimas 8 semanas ----------
+
+  async function cargarActividadUsuario() {
+    tabActividad.innerHTML = `<div class="meta">Cargando…</div>`;
+    try {
+      const result = await api("adminActividadUsuario", {
+        target_usuario_id: usuarioSeleccionado.id,
+        semana: inicioSemana(),
+      });
+      const total = result.diasRutina;
+
+      tabActividad.innerHTML = `
+        <div class="meta">Último uso: ${fmtHace(result.ultimoUso)}</div>
+        <div class="admin-actividad">
+          ${result.semanas
+            .map((s, i) => {
+              const pct = total ? Math.min(100, Math.round((s.dias / total) * 100)) : 0;
+              return `
+                <div class="admin-actividad-fila">
+                  <span class="admin-actividad-semana">${i === 0 ? "Esta semana" : `Semana del ${fmtFecha(`${s.semana}T12:00:00`)}`}</span>
+                  <span class="admin-actividad-barra"><span style="width:${pct}%"></span></span>
+                  <span class="admin-actividad-dato"><strong>${s.dias}/${total}</strong> días · ${s.ejercicios} ejerc.</span>
+                </div>`;
+            })
+            .join("")}
+        </div>
+        <div class="meta">Un día cuenta como entrenado cuando tiene todos sus ejercicios marcados.</div>
+      `;
+    } catch (error) {
+      tabActividad.innerHTML = `<div class="meta">${esc(error.message)}</div>`;
+    }
   }
 
   // ---------- Pesos y métricas (solo lectura) ----------
