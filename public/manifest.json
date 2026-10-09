@@ -1,6 +1,6 @@
 {
-  "name": "Mi Rutina",
-  "short_name": "Mi Rutina",
+  "name": "MecFit",
+  "short_name": "MecFit",
   "description": "Tu entrenamiento en un solo lugar.",
   "start_url": "/?source=pwa",
   "scope": "/",

@@ -286,6 +286,9 @@ button{
    las tarjetas de ejercicio y aplastaba el contenido en una columna de 42px). */
 .admin-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-md);padding:16px;margin-bottom:14px;box-shadow:0 6px 20px rgba(16,24,40,.045);min-width:0}
 .admin-card .tabs-wrap{position:static;background:none;padding:0;margin:12px 0}
+.mi-cuenta{padding:16px;display:flex;flex-direction:column;gap:16px}
+.mi-cuenta form .field{margin:8px 0}
+.auth-error.ok{color:#067647;background:#ecfdf3;border-color:#abefc6}
 .admin-asignar{padding:16px;display:flex;flex-direction:column;gap:12px}
 .admin-asignar-lista{display:flex;flex-direction:column;gap:8px;max-height:55vh;overflow-y:auto}
 .admin-asignar-opcion{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:12px;cursor:pointer}

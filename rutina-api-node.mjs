@@ -75,7 +75,7 @@ async function usuarioDesdeRequest(request) {
   if (!token) return null;
 
   const filas = await db.sql`
-    SELECT u.id, u.email, u.nombre, u.rol
+    SELECT u.id, u.email, u.nombre, u.rol, (u.password_hash IS NOT NULL) AS tiene_password
     FROM sesiones s
     JOIN usuarios u ON u.id = s.usuario_id
     WHERE s.id = ${token} AND s.expires_at > NOW()
@@ -87,6 +87,8 @@ async function usuarioDesdeRequest(request) {
     email: filas[0].email,
     nombre: filas[0].nombre,
     rol: filas[0].rol || "usuario",
+    tienePassword: Boolean(filas[0].tiene_password),
+    token,
   };
 }
 
@@ -114,12 +116,14 @@ async function crearRutinaPropia(usuarioId) {
 }
 
 function datosPublicosUsuario(usuario) {
-  return {
+  const datos = {
     id: usuario.id,
     email: usuario.email,
     nombre: usuario.nombre,
     rol: usuario.rol || "usuario",
   };
+  if (usuario.tienePassword !== undefined) datos.tienePassword = usuario.tienePassword;
+  return datos;
 }
 
 // ---------- Administración (solo rol = admin) ----------
@@ -134,6 +138,7 @@ const ACCIONES_ADMIN = new Set([
   "adminCambiarRol",
   "adminHistorialPesosUsuario",
   "adminHistorialMetricasUsuario",
+  "adminPasswordTemporal",
 ]);
 
 // Cada usuario trabaja sobre una sola rutina (ver rutinaIdDeUsuario), así
@@ -285,6 +290,26 @@ async function manejarAccionAdmin(action, body, usuarioActual) {
         ejercicio: h.ejercicio,
       })),
     });
+  }
+
+  if (action === "adminPasswordTemporal") {
+    // Para quien olvidó su contraseña: el admin le pone una temporal, se la
+    // pasa, y la persona la cambia desde "Mi cuenta".
+    const targetId = Number(body.target_usuario_id);
+    const password = String(body.password ?? "");
+    if (!Number.isInteger(targetId)) return respuesta({ error: "Usuario inválido." }, 400);
+    if (password.length < 6) {
+      return respuesta({ error: "La contraseña debe tener al menos 6 caracteres." }, 400);
+    }
+
+    const filas = await db.sql`
+      UPDATE usuarios SET password_hash = ${hashPassword(password)} WHERE id = ${targetId} RETURNING id
+    `;
+    if (!filas.length) return respuesta({ error: "Ese usuario no existe." }, 404);
+    if (targetId !== usuarioActual.id) {
+      await db.sql`DELETE FROM sesiones WHERE usuario_id = ${targetId}`;
+    }
+    return respuesta({ ok: true });
   }
 
   if (action === "adminHistorialMetricasUsuario") {
@@ -483,6 +508,18 @@ async function importarRutina(rutinaId, dias, modo) {
   });
 }
 
+// ---------- Marcas de "hecho" por semana ----------
+
+const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// semana = fecha del lunes (la calcula el navegador con su hora local).
+async function marcasDeSemana(usuarioId, semana) {
+  const filas = await db.sql`
+    SELECT ejercicio_id FROM marcas_semana WHERE usuario_id = ${usuarioId} AND semana = ${semana}
+  `;
+  return filas.map((f) => Number(f.ejercicio_id));
+}
+
 // ---------- Rutina ----------
 
 async function obtenerRutina(rutinaId) {
@@ -511,12 +548,15 @@ async function obtenerRutina(rutinaId) {
   // Los pesos se guardan por ejercicio de catálogo (no por su aparición en
   // un día puntual), así que el mismo ejercicio usado en varios días
   // comparte un único historial de peso.
+  // El nombre se toma de la cuenta (no del texto guardado en el peso), así
+  // si alguien se cambia el nombre su historial sigue siendo uno solo.
   const pesos = catalogoIds.length
     ? await db.sql`
-      SELECT catalogo_id, persona, peso, fecha
-      FROM pesos
-      WHERE catalogo_id = ANY(${catalogoIds})
-      ORDER BY catalogo_id, persona, fecha DESC, created_at DESC
+      SELECT p.catalogo_id, p.usuario_id, u.nombre AS persona, p.peso, p.fecha
+      FROM pesos p
+      JOIN usuarios u ON u.id = p.usuario_id
+      WHERE p.catalogo_id = ANY(${catalogoIds})
+      ORDER BY p.catalogo_id, p.usuario_id, p.fecha DESC, p.created_at DESC
     `
     : [];
 
@@ -541,8 +581,9 @@ async function obtenerRutina(rutinaId) {
         pesos: pesos
           .filter((p) => Number(p.catalogo_id) === Number(e.catalogo_id))
           .reduce((acc, p) => {
-            if (!acc.some((item) => item.persona === p.persona)) {
+            if (!acc.some((item) => item.usuarioId === Number(p.usuario_id))) {
               acc.push({
+                usuarioId: Number(p.usuario_id),
                 persona: p.persona,
                 peso: Number(p.peso),
                 fecha: p.fecha,
@@ -583,10 +624,12 @@ export default async (request) => {
       }
 
       const rutinaId = await rutinaIdDeUsuario(usuario.id);
+      const semana = url.searchParams.get("semana");
       return respuesta({
         ok: true,
         usuario: datosPublicosUsuario(usuario),
         rutina: rutinaId ? await obtenerRutina(rutinaId) : [],
+        marcas: FECHA_RE.test(semana || "") ? await marcasDeSemana(usuario.id, semana) : [],
       });
     }
 
@@ -715,6 +758,28 @@ export default async (request) => {
     const usuario = await usuarioDesdeRequest(request);
     if (!usuario) return respuesta({ ok: false, error: "No autorizado." }, 401);
 
+    if (action === "cambiarPassword") {
+      // Las cuentas creadas solo con Google no tienen contraseña: pueden
+      // crear una sin indicar la actual.
+      const actual = String(body.actual ?? "");
+      const nueva = String(body.nueva ?? "");
+
+      if (nueva.length < 6) {
+        return respuesta({ error: "La contraseña nueva debe tener al menos 6 caracteres." }, 400);
+      }
+
+      const filas = await db.sql`SELECT password_hash FROM usuarios WHERE id = ${usuario.id}`;
+      const hashActual = filas[0]?.password_hash;
+      if (hashActual && !verifyPassword(actual, hashActual)) {
+        return respuesta({ error: "La contraseña actual no es correcta." }, 400);
+      }
+
+      await db.sql`UPDATE usuarios SET password_hash = ${hashPassword(nueva)} WHERE id = ${usuario.id}`;
+      // Cierra las otras sesiones abiertas (por si alguien más la conocía).
+      await db.sql`DELETE FROM sesiones WHERE usuario_id = ${usuario.id} AND id <> ${usuario.token}`;
+      return respuesta({ ok: true });
+    }
+
     if (ACCIONES_ADMIN.has(action)) {
       if (usuario.rol !== "admin") return respuesta({ error: "No autorizado." }, 403);
       return manejarAccionAdmin(action, body, usuario);
@@ -811,6 +876,31 @@ export default async (request) => {
       }
       await db.sql`DELETE FROM dias WHERE id = ${id}`;
       return respuesta({ ok: true, rutina: await obtenerRutina(rutinaId) });
+    }
+
+    if (action === "marcarEjercicio") {
+      const ejercicioId = Number(body.ejercicio_id);
+      const semana = String(body.semana ?? "");
+      if (!Number.isInteger(ejercicioId) || !FECHA_RE.test(semana)) {
+        return respuesta({ error: "Datos inválidos." }, 400);
+      }
+      if (!(await ejercicioPerteneceARutina(ejercicioId, rutinaId))) {
+        return respuesta({ error: "El ejercicio no existe." }, 404);
+      }
+
+      if (body.hecho) {
+        await db.sql`
+          INSERT INTO marcas_semana (usuario_id, ejercicio_id, semana)
+          VALUES (${usuarioObjetivo.id}, ${ejercicioId}, ${semana})
+          ON CONFLICT DO NOTHING
+        `;
+      } else {
+        await db.sql`
+          DELETE FROM marcas_semana
+          WHERE usuario_id = ${usuarioObjetivo.id} AND ejercicio_id = ${ejercicioId} AND semana = ${semana}
+        `;
+      }
+      return respuesta({ ok: true });
     }
 
     if (action === "importarRutina") {
@@ -1190,22 +1280,22 @@ export default async (request) => {
 
       const persona = usuarioObjetivo.nombre;
 
-      // Solo puede existir un peso por ejercicio + persona + día.
+      // Solo puede existir un peso por ejercicio + usuario + día.
       // Si ya existe un registro para hoy (o la fecha indicada), se actualiza
       // en vez de crear uno nuevo (upsert vía ON CONFLICT).
       if (/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
         await db.sql`
           INSERT INTO pesos (catalogo_id, persona, peso, fecha, usuario_id)
           VALUES (${catalogoId}, ${persona}, ${peso}, ${fecha}, ${usuarioObjetivo.id})
-          ON CONFLICT (catalogo_id, persona, fecha)
-          DO UPDATE SET peso = EXCLUDED.peso, created_at = NOW(), usuario_id = ${usuarioObjetivo.id}
+          ON CONFLICT (catalogo_id, usuario_id, fecha)
+          DO UPDATE SET peso = EXCLUDED.peso, created_at = NOW(), persona = EXCLUDED.persona
         `;
       } else {
         await db.sql`
           INSERT INTO pesos (catalogo_id, persona, peso, fecha, usuario_id)
           VALUES (${catalogoId}, ${persona}, ${peso}, CURRENT_DATE, ${usuarioObjetivo.id})
-          ON CONFLICT (catalogo_id, persona, fecha)
-          DO UPDATE SET peso = EXCLUDED.peso, created_at = NOW(), usuario_id = ${usuarioObjetivo.id}
+          ON CONFLICT (catalogo_id, usuario_id, fecha)
+          DO UPDATE SET peso = EXCLUDED.peso, created_at = NOW(), persona = EXCLUDED.persona
         `;
       }
 
@@ -1294,20 +1384,20 @@ export default async (request) => {
 
       const persona = usuarioObjetivo.nombre;
 
-      // Un solo registro por persona y día: si ya existe, se actualiza (upsert).
+      // Un solo registro por usuario y día: si ya existe, se actualiza (upsert).
       if (/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
         await db.sql`
           INSERT INTO metricas_corporales (persona, fecha, peso, grasa, agua, usuario_id)
           VALUES (${persona}, ${fecha}, ${peso}, ${grasa}, ${agua}, ${usuarioObjetivo.id})
-          ON CONFLICT (persona, fecha)
-          DO UPDATE SET peso = EXCLUDED.peso, grasa = EXCLUDED.grasa, agua = EXCLUDED.agua, created_at = NOW(), usuario_id = ${usuarioObjetivo.id}
+          ON CONFLICT (usuario_id, fecha)
+          DO UPDATE SET peso = EXCLUDED.peso, grasa = EXCLUDED.grasa, agua = EXCLUDED.agua, created_at = NOW(), persona = EXCLUDED.persona
         `;
       } else {
         await db.sql`
           INSERT INTO metricas_corporales (persona, fecha, peso, grasa, agua, usuario_id)
           VALUES (${persona}, CURRENT_DATE, ${peso}, ${grasa}, ${agua}, ${usuarioObjetivo.id})
-          ON CONFLICT (persona, fecha)
-          DO UPDATE SET peso = EXCLUDED.peso, grasa = EXCLUDED.grasa, agua = EXCLUDED.agua, created_at = NOW(), usuario_id = ${usuarioObjetivo.id}
+          ON CONFLICT (usuario_id, fecha)
+          DO UPDATE SET peso = EXCLUDED.peso, grasa = EXCLUDED.grasa, agua = EXCLUDED.agua, created_at = NOW(), persona = EXCLUDED.persona
         `;
       }
 

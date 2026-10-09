@@ -66,6 +66,7 @@
                   ? `<button type="button" class="small" data-admin-quitar-rol="${u.id}">Quitar admin</button>`
                   : `<button type="button" class="small" data-admin-hacer-rol="${u.id}">Hacer admin</button>`
               }
+              <button type="button" class="small" data-admin-password="${u.id}">Contraseña</button>
               <button type="button" class="small" data-admin-eliminar="${u.id}" style="color:#c0392b">Eliminar</button>
             </div>
           </div>`;
@@ -86,6 +87,62 @@
 
     listaUsuariosEl.querySelectorAll("[data-admin-eliminar]").forEach((btn) => {
       btn.addEventListener("click", () => eliminarUsuario(Number(btn.dataset.adminEliminar)));
+    });
+
+    listaUsuariosEl.querySelectorAll("[data-admin-password]").forEach((btn) => {
+      btn.addEventListener("click", () => abrirPasswordTemporal(Number(btn.dataset.adminPassword)));
+    });
+  }
+
+  // Para quien olvidó su contraseña: el admin le pone una temporal, se la
+  // pasa por fuera de la app, y la persona la cambia desde "Mi cuenta".
+  function abrirPasswordTemporal(id) {
+    const usuario = usuarios.find((u) => u.id === id);
+    if (!usuario) return;
+
+    modalTitle.textContent = `Contraseña de ${usuario.nombre}`;
+    modal.querySelector(".modal-card").classList.remove("vertical");
+    modalBody.innerHTML = `
+      <form id="passwordTemporalForm" class="mi-cuenta">
+        <p class="footer-note" style="margin:0;text-align:left">
+          Poné una contraseña temporal y pasásela a ${esc(usuario.nombre)} (${esc(usuario.email)}).
+          Se cierran sus sesiones abiertas; después puede cambiarla desde "Mi cuenta".
+        </p>
+        <div class="field"><label>Contraseña temporal</label>
+          <input type="text" id="passwordTemporal" minlength="6" required autocomplete="off"></div>
+        <p class="auth-error" id="passwordTemporalMensaje" hidden></p>
+        <div class="form-actions">
+          <button type="button" class="small" id="passwordTemporalCancelar">Cancelar</button>
+          <button type="submit" class="main-btn" id="passwordTemporalGuardar">Guardar</button>
+        </div>
+      </form>
+    `;
+    modal.classList.add("open");
+
+    const input = document.getElementById("passwordTemporal");
+    const mensaje = document.getElementById("passwordTemporalMensaje");
+    const guardar = document.getElementById("passwordTemporalGuardar");
+    // Sugerencia fácil de dictar: 8 caracteres sin letras que se confundan.
+    const letras = "abcdefghjkmnpqrstuvwxyz23456789";
+    input.value = Array.from(crypto.getRandomValues(new Uint32Array(8)), (n) => letras[n % letras.length]).join("");
+
+    document.getElementById("passwordTemporalCancelar").addEventListener("click", closeVideo);
+    document.getElementById("passwordTemporalForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      mensaje.hidden = true;
+      mensaje.classList.remove("ok");
+      guardar.disabled = true;
+      try {
+        await api("adminPasswordTemporal", { target_usuario_id: id, password: input.value });
+        mensaje.textContent = `Listo. La contraseña de ${usuario.nombre} ahora es: ${input.value}`;
+        mensaje.classList.add("ok");
+        mensaje.hidden = false;
+        guardar.hidden = true;
+      } catch (error) {
+        mensaje.textContent = error.message;
+        mensaje.hidden = false;
+        guardar.disabled = false;
+      }
     });
   }
 
@@ -675,7 +732,9 @@
     }
   }
 
-  // ---------- Cerrar sesión ----------
+  // ---------- Mi cuenta / cerrar sesión ----------
+
+  document.getElementById("adminMiCuentaButton").addEventListener("click", abrirMiCuenta);
 
   logoutBtn.addEventListener("click", async () => {
     try {
