@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 const ICONOS = [
   "dumbbell", "user", "chart-column", "pencil", "download",
   "x", "plus", "users", "save", "trash-2", "search",
-  "grip-vertical", "chevron-up", "chevron-down", "share"
+  "grip-vertical", "chevron-up", "chevron-down", "share", "menu", "upload"
 ];
 
 const symbols = ICONOS.map((nombre) => {
@@ -12,9 +12,9 @@ const symbols = ICONOS.map((nombre) => {
   return `<symbol id="${nombre}" viewBox="0 0 24 24">${inner}</symbol>`;
 }).join("\n");
 
-mkdirSync("icons", { recursive: true });
+mkdirSync("public/icons", { recursive: true });
 writeFileSync(
-  "icons/sprite.svg",
+  "public/icons/sprite.svg",
   `<svg xmlns="http://www.w3.org/2000/svg" style="display:none">\n${symbols}\n</svg>\n`
 );
-console.log(`${ICONOS.length} iconos escritos en icons/sprite.svg`);
+console.log(`${ICONOS.length} iconos escritos en public/icons/sprite.svg`);
