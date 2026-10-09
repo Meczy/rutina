@@ -84,23 +84,25 @@ La aplicación está desplegada en producción en:
 
 ```text
 /
-├── css/
-├── datos/
-├── db/
-│   └── schema.ts
-├── icons/
-├── js/
-├── netlify/
-│   └── functions/
-│       └── rutina.mjs
-├── index.html
-├── manifest.json
-├── sw.js
-├── package.json
-├── package-lock.json
-├── drizzle.config.ts
+├── public/                  # Lo único que se sirve al navegador
+│   ├── css/
+│   ├── icons/
+│   ├── js/
+│   │   ├── app.js           # App de entrenamiento
+│   │   ├── admin.js         # Panel de administración
+│   │   └── importar-pdf.js  # Importar rutina desde PDF
+│   ├── vendor/pdfjs/        # Lector de PDF (pdf.js)
+│   ├── index.html
+│   ├── manifest.json
+│   └── sw.js
+├── netlify/database/migrations/  # Migraciones SQL (se aplican a mano, en orden)
+├── scripts/
+│   ├── build-icons.mjs      # Regenera public/icons/sprite.svg
+│   └── crear-admin.mjs
 ├── server.mjs
 ├── rutina-api-node.mjs
+├── auth.mjs
+├── package.json
 └── README.md
 ```
 

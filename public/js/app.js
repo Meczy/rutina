@@ -36,6 +36,7 @@ const modalTitle = document.getElementById("modalTitle");
 
 const totalDaysEl = document.getElementById("totalDays");
 const totalExercisesEl = document.getElementById("totalExercises");
+const diasEntrenadosEl = document.getElementById("diasEntrenados");
 const editorButton = document.getElementById("editorButton");
 const personaButton = document.getElementById("personaButton");
 const progresoButton = document.getElementById("progresoButton");
@@ -120,17 +121,77 @@ function guardarUltimoDia(day) {
   if (day) localStorage.setItem(LAST_DAY_KEY, String(day.id));
 }
 
-function limpiarChecksAntiguos() {
-  const lunesActual = inicioSemana();
-  const aBorrar = [];
-  for (let i = 0; i < localStorage.length; i += 1) {
-    const key = localStorage.key(i);
-    if (key && key.startsWith(DONE_PREFIX) && !key.endsWith(lunesActual)) {
-      aBorrar.push(key);
-    }
+// --- Marcas de "hecho": se guardan en el servidor por semana (lunes), así
+// se ven igual en todos los dispositivos y se reinician solas cada lunes. ---
+
+let marcasSemana = new Set(); // ids de ejercicio (asignación a un día) marcados
+let semanaMarcas = null; // lunes al que corresponden las marcas cargadas
+
+// Antes las marcas vivían en localStorage. Las de la semana actual se suben
+// al servidor una sola vez y después se borran del navegador.
+async function migrarMarcasLocales() {
+  let claves;
+  try {
+    claves = Object.keys(localStorage).filter((key) => key.startsWith(DONE_PREFIX));
+  } catch {
+    return;
   }
-  aBorrar.forEach((key) => localStorage.removeItem(key));
+  if (!claves.length) return;
+
+  const idsEnRutina = new Set(rutina.flatMap((d) => d.ejercicios.map((e) => e.id)));
+  let todoOk = true;
+
+  for (const key of claves) {
+    const match = key.slice(DONE_PREFIX.length).match(/^\d+-(\d+)-(\d{4}-\d{2}-\d{2})$/);
+    const ejercicioId = match ? Number(match[1]) : null;
+    const vigente =
+      match && match[2] === semanaMarcas && localStorage.getItem(key) === "1" && idsEnRutina.has(ejercicioId);
+
+    if (vigente && !marcasSemana.has(ejercicioId)) {
+      try {
+        await api("marcarEjercicio", { ejercicio_id: ejercicioId, semana: semanaMarcas, hecho: true });
+        marcasSemana.add(ejercicioId);
+      } catch {
+        todoOk = false;
+        continue;
+      }
+    }
+    localStorage.removeItem(key);
+  }
+
+  if (!todoOk) console.warn("Algunas marcas locales no se pudieron subir; se reintenta en la próxima carga.");
 }
+
+async function marcarEjercicio(exercise, hecho) {
+  const semana = semanaMarcas || inicioSemana();
+  if (hecho) marcasSemana.add(exercise.id);
+  else marcasSemana.delete(exercise.id);
+  actualizarDiasEntrenados();
+
+  try {
+    await api("marcarEjercicio", { ejercicio_id: exercise.id, semana, hecho });
+  } catch (error) {
+    if (hecho) marcasSemana.delete(exercise.id);
+    else marcasSemana.add(exercise.id);
+    render();
+    alert(error.message);
+  }
+}
+
+// Un día cuenta como entrenado cuando todos sus ejercicios están marcados.
+function actualizarDiasEntrenados() {
+  const conEjercicios = rutina.filter((d) => d.ejercicios.length);
+  const entrenados = conEjercicios.filter((d) => d.ejercicios.every((e) => marcasSemana.has(e.id)));
+  diasEntrenadosEl.textContent = `${entrenados.length}/${conEjercicios.length}`;
+}
+
+// Si la app queda abierta y empieza una semana nueva, al volver a ella se
+// recargan las marcas (quedan todas sin marcar).
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && usuarioActual && semanaMarcas && semanaMarcas !== inicioSemana()) {
+    cargarRutina().catch(() => {});
+  }
+});
 
 // --- Usuario logueado (reemplaza al viejo nombre de "persona" libre) ---
 
@@ -140,8 +201,9 @@ function nombreUsuario() {
   return usuarioActual ? usuarioActual.nombre : "";
 }
 
-function esMiPersona(persona) {
-  return usuarioActual && persona === usuarioActual.nombre;
+// p = un peso de exercise.pesos ({ usuarioId, persona, peso, fecha }).
+function esMiPeso(p) {
+  return Boolean(usuarioActual) && p.usuarioId === usuarioActual.id;
 }
 
 function actualizarPersonaButton() {
@@ -169,9 +231,7 @@ async function cerrarSesion() {
 
 async function registrarPeso(exercise) {
   if (!usuarioActual) return;
-  const persona = usuarioActual.nombre;
-
-  const previo = (exercise.pesos || []).find((p) => p.persona === persona);
+  const previo = (exercise.pesos || []).find(esMiPeso);
   const entrada = prompt(
     `¿Cuánto peso usaste hoy en "${exercise.name}"? (kg)`,
     previo ? String(previo.peso) : ""
@@ -227,7 +287,6 @@ async function obtenerHistorialPeso(exercise, persona) {
 }
 
 async function verHistorialPeso(exercise, persona) {
-  if (!esMiPersona(persona)) return;
   try {
     const historial = await obtenerHistorialPeso(exercise, persona);
     renderHistorialPeso(exercise, persona, historial);
@@ -667,7 +726,8 @@ async function api(action, data = {}) {
 }
 
 async function cargarRutina() {
-  const response = await fetch("/api/rutina", {
+  const semana = inicioSemana();
+  const response = await fetch(`/api/rutina?semana=${semana}`, {
     method: "GET",
     cache: "no-store"
   });
@@ -686,6 +746,12 @@ async function cargarRutina() {
 
   usuarioActual = result.usuario || usuarioActual;
   rutina = result.rutina;
+  marcasSemana = new Set(result.marcas || []);
+  semanaMarcas = semana;
+
+  if (usuarioActual && usuarioActual.rol !== "admin") {
+    await migrarMarcasLocales();
+  }
 
   if (!diaRestaurado) {
     diaRestaurado = true;
@@ -716,6 +782,7 @@ function render() {
     (total, day) => total + day.ejercicios.length,
     0
   );
+  actualizarDiasEntrenados();
 
   rutina.forEach((day, dayIndex) => {
     const tab = document.createElement("button");
@@ -737,8 +804,7 @@ function render() {
     list.className = "exercise-list";
 
     day.ejercicios.forEach((exercise, exerciseIndex) => {
-      const completed =
-        localStorage.getItem(`${DONE_PREFIX}${day.id}-${exercise.id}-${inicioSemana()}`) === "1";
+      const completed = marcasSemana.has(exercise.id);
 
       const card = document.createElement("article");
       const platform = /instagram\.com/i.test(exercise.url || "")
@@ -749,8 +815,8 @@ function render() {
 
       const pesosHtml = (exercise.pesos || [])
         .map(
-          (p) => `
-            <button type="button" class="weight-chip${esMiPersona(p.persona) ? " mine" : ""}" data-persona="${esc(p.persona)}">
+          (p, i) => `
+            <button type="button" class="weight-chip${esMiPeso(p) ? " mine" : ""}" data-peso-index="${i}">
               ${icon("dumbbell")} ${esc(p.persona)} <strong>${formatPeso(p.peso)}kg</strong>
             </button>
           `
@@ -794,7 +860,9 @@ function render() {
 
       card.querySelectorAll(".weight-chip").forEach((chip) => {
         chip.addEventListener("click", () => {
-          verHistorialPeso(exercise, chip.dataset.persona);
+          const p = exercise.pesos[Number(chip.dataset.pesoIndex)];
+          // Solo se puede abrir (y editar) el historial propio.
+          if (p && esMiPeso(p)) verHistorialPeso(exercise, p.persona);
         });
       });
 
@@ -813,11 +881,8 @@ function render() {
       }
 
       card.querySelector(".check").addEventListener("change", (event) => {
-        localStorage.setItem(
-          `${DONE_PREFIX}${day.id}-${exercise.id}-${inicioSemana()}`,
-          event.target.checked ? "1" : "0"
-        );
         card.classList.toggle("done", event.target.checked);
+        marcarEjercicio(exercise, event.target.checked);
       });
 
       list.appendChild(card);
@@ -1732,8 +1797,89 @@ editorButton.addEventListener("click", () => {
 });
 personaButton.addEventListener("click", () => {
   cerrarMenuNav();
-  cerrarSesion();
+  abrirMiCuenta();
 });
+
+// --- Mi cuenta: datos, cambiar contraseña y cerrar sesión ---
+
+function abrirMiCuenta() {
+  if (!usuarioActual) return;
+  const pideActual = usuarioActual.tienePassword !== false;
+
+  modalTitle.textContent = "Mi cuenta";
+  modal.querySelector(".modal-card").classList.remove("vertical");
+  modalBody.innerHTML = `
+    <div class="mi-cuenta">
+      <div>
+        <div class="name">${esc(usuarioActual.nombre)}</div>
+        <div class="footer-note" style="margin:2px 0 0;text-align:left">${esc(usuarioActual.email)}</div>
+      </div>
+
+      <form id="cambiarPasswordForm">
+        <h3 style="margin:0 0 4px">${pideActual ? "Cambiar contraseña" : "Crear contraseña"}</h3>
+        ${
+          pideActual
+            ? ""
+            : `<p class="footer-note" style="margin:0;text-align:left">Entrás con Google. Si creás una contraseña, también vas a poder entrar con tu correo.</p>`
+        }
+        ${
+          pideActual
+            ? `<div class="field"><label>Contraseña actual</label><input type="password" id="passwordActual" autocomplete="current-password" required></div>`
+            : ""
+        }
+        <div class="field"><label>Contraseña nueva</label><input type="password" id="passwordNueva" autocomplete="new-password" minlength="6" required></div>
+        <div class="field"><label>Repetir contraseña nueva</label><input type="password" id="passwordRepetir" autocomplete="new-password" minlength="6" required></div>
+        <p class="auth-error" id="cambiarPasswordMensaje" hidden></p>
+        <div class="form-actions" style="margin-top:8px">
+          <button type="submit" class="main-btn" id="cambiarPasswordGuardar">Guardar contraseña</button>
+        </div>
+      </form>
+
+      <button type="button" class="small danger" id="miCuentaCerrarSesion" style="width:100%">Cerrar sesión</button>
+    </div>
+  `;
+  modal.classList.add("open");
+
+  const form = document.getElementById("cambiarPasswordForm");
+  const mensaje = document.getElementById("cambiarPasswordMensaje");
+  const guardar = document.getElementById("cambiarPasswordGuardar");
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const actual = pideActual ? document.getElementById("passwordActual").value : "";
+    const nueva = document.getElementById("passwordNueva").value;
+    const repetir = document.getElementById("passwordRepetir").value;
+
+    mensaje.hidden = true;
+    mensaje.classList.remove("ok");
+
+    if (nueva !== repetir) {
+      mensaje.textContent = "Las contraseñas nuevas no coinciden.";
+      mensaje.hidden = false;
+      return;
+    }
+
+    guardar.disabled = true;
+    try {
+      await api("cambiarPassword", { actual, nueva });
+      usuarioActual.tienePassword = true;
+      form.reset();
+      mensaje.textContent = "Listo, tu contraseña se actualizó.";
+      mensaje.classList.add("ok");
+      mensaje.hidden = false;
+    } catch (error) {
+      mensaje.textContent = error.message;
+      mensaje.hidden = false;
+    } finally {
+      guardar.disabled = false;
+    }
+  });
+
+  document.getElementById("miCuentaCerrarSesion").addEventListener("click", () => {
+    closeVideo();
+    cerrarSesion();
+  });
+}
 progresoButton.addEventListener("click", mostrarInfo);
 diasButton.addEventListener("click", () => showDay(currentDayIndex));
 
@@ -1794,7 +1940,7 @@ if ("serviceWorker" in navigator) {
     installButton.hidden = false;
     installButton.addEventListener("click", () => {
       alert(
-        "Para instalar Mi Rutina en tu iPhone:\n\n" +
+        "Para instalar MecFit en tu iPhone:\n\n" +
         "1. Tocá el botón Compartir (el cuadrito con la flecha ↑).\n" +
         "2. Elegí 'Agregar a pantalla de inicio'.\n" +
         "3. Confirmá tocando 'Agregar'."
@@ -1848,6 +1994,7 @@ function mostrarPantallaApp() {
 
 function mostrarPantallaLogin() {
   appRoot.hidden = true;
+  document.getElementById("panelAdmin").hidden = true;
   authScreen.hidden = false;
   authError.hidden = true;
   inicializarGoogleSignIn();
@@ -1956,7 +2103,6 @@ async function inicializarGoogleSignIn(intentos = 0) {
   actualizarFormularioAuth();
 
   try {
-    limpiarChecksAntiguos();
     await cargarRutina();
     if (usuarioActual && usuarioActual.rol === "admin") {
       authScreen.hidden = true;
