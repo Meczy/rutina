@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 const ICONOS = [
   "dumbbell", "user", "chart-column", "pencil", "download",
   "x", "plus", "users", "save", "trash-2", "search",
-  "grip-vertical", "chevron-up", "chevron-down", "share", "menu", "upload"
+  "grip-vertical", "chevron-up", "chevron-down", "share", "menu", "upload", "minus"
 ];
 
 const symbols = ICONOS.map((nombre) => {
@@ -18,3 +18,4 @@ writeFileSync(
   `<svg xmlns="http://www.w3.org/2000/svg" style="display:none">\n${symbols}\n</svg>\n`
 );
 console.log(`${ICONOS.length} iconos escritos en public/icons/sprite.svg`);
+console.log("Acordate de subir SPRITE_VERSION en public/js/app.js y el ?v= en public/index.html y public/sw.js.");
