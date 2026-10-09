@@ -17,6 +17,7 @@ const ICON_PLAY = `
 `;
 
 let rutina = [];
+let misRutinas = []; // [{ id, nombre, activa, dias, compartidaCon }]
 let selectedEditorDay = 0;
 let currentDayIndex = 0;
 let vista = "dias";
@@ -36,6 +37,9 @@ const modalTitle = document.getElementById("modalTitle");
 const totalDaysEl = document.getElementById("totalDays");
 const totalExercisesEl = document.getElementById("totalExercises");
 const diasEntrenadosEl = document.getElementById("diasEntrenados");
+const selectorRutinaEl = document.getElementById("selectorRutina");
+const rutinaActivaSelect = document.getElementById("rutinaActivaSelect");
+const gestionarRutinasButton = document.getElementById("gestionarRutinasButton");
 const editorButton = document.getElementById("editorButton");
 const personaButton = document.getElementById("personaButton");
 const progresoButton = document.getElementById("progresoButton");
@@ -243,6 +247,35 @@ function pedirPeso({ titulo, detalle = "", valor = "" }) {
       input.focus();
       input.select();
     },
+  });
+}
+
+// Campo numérico con botones − / + propios (las flechas del navegador no
+// aparecen en el celular). Acepta coma o punto como decimal.
+function campoConPasos(id, { paso = 0.1, maximo = 999, requerido = false } = {}) {
+  return `
+    <div class="campo-pasos" data-paso="${paso}" data-maximo="${maximo}">
+      <button type="button" class="small campo-pasos-btn" data-direccion="-1" aria-label="Restar ${paso}">−</button>
+      <input id="${id}" inputmode="decimal" autocomplete="off" ${requerido ? "required" : ""}>
+      <button type="button" class="small campo-pasos-btn" data-direccion="1" aria-label="Sumar ${paso}">+</button>
+    </div>
+  `;
+}
+
+function activarCamposConPasos(contenedor) {
+  contenedor.querySelectorAll(".campo-pasos").forEach((campo) => {
+    const input = campo.querySelector("input");
+    const paso = Number(campo.dataset.paso);
+    const maximo = Number(campo.dataset.maximo);
+
+    campo.querySelectorAll(".campo-pasos-btn").forEach((boton) => {
+      boton.addEventListener("click", () => {
+        const actual = Number(input.value.replace(",", "."));
+        const base = Number.isFinite(actual) ? actual : 0;
+        const nuevo = Math.round((base + paso * Number(boton.dataset.direccion)) * 10) / 10;
+        input.value = formatPeso(Math.min(maximo, Math.max(0, nuevo)));
+      });
+    });
   });
 }
 
@@ -610,9 +643,10 @@ async function renderInfoTab() {
       </div>
       <form id="metricaForm">
         <div class="field"><label>Fecha</label><input type="date" id="metricaFecha" required></div>
-        <div class="field"><label>Peso corporal (kg)</label><input type="number" step="0.1" min="0" id="metricaPeso" required></div>
-        <div class="field"><label>Grasa corporal % (opcional)</label><input type="number" step="0.1" min="0" max="100" id="metricaGrasa"></div>
-        <div class="field"><label>Agua % (opcional)</label><input type="number" step="0.1" min="0" max="100" id="metricaAgua"></div>
+        <div class="field"><label for="metricaPeso">Peso corporal (kg)</label>${campoConPasos("metricaPeso", { requerido: true })}</div>
+        <div class="field"><label for="metricaGrasa">Grasa corporal % (opcional)</label>${campoConPasos("metricaGrasa", { maximo: 100 })}</div>
+        <div class="field"><label for="metricaAgua">Agua % (opcional)</label>${campoConPasos("metricaAgua", { maximo: 100 })}</div>
+        <p class="footer-note" id="metricaPrellenado" style="margin:0 0 10px;text-align:left" hidden></p>
         <button type="submit" class="main-btn">${icon("save")} Guardar registro del día</button>
       </form>
     </div>
@@ -629,6 +663,7 @@ async function renderInfoTab() {
 
   fechaInput.value = fechaHoy();
   fechaInput.max = fechaHoy();
+  activarCamposConPasos(form);
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -662,24 +697,54 @@ async function renderInfoTab() {
 
       form.reset();
       fechaInput.value = fechaHoy();
-      await cargarHistorialMetricas();
+      prellenarMetricas(await cargarHistorialMetricas());
     } catch (error) {
       avisar(error.message);
     }
   });
 
-  await cargarHistorialMetricas();
+  prellenarMetricas(await cargarHistorialMetricas());
 }
 
+// Carga el formulario con el último registro, para solo ajustarlo con los
+// botones − / +. No pisa lo que la persona ya haya escrito.
+function prellenarMetricas(historial) {
+  const ultimo = historial && historial[0];
+  if (!ultimo) return;
+
+  const campos = [
+    ["metricaPeso", ultimo.peso],
+    ["metricaGrasa", ultimo.grasa],
+    ["metricaAgua", ultimo.agua],
+  ];
+  let algunoCargado = false;
+  for (const [id, valor] of campos) {
+    const input = document.getElementById(id);
+    if (input && input.value === "" && valor !== null && valor !== undefined) {
+      input.value = formatPeso(valor);
+      algunoCargado = true;
+    }
+  }
+
+  const nota = document.getElementById("metricaPrellenado");
+  if (nota && algunoCargado) {
+    nota.textContent = `Cargado con tu último registro (${formatFecha(ultimo.fecha)}). Ajustalo y guardá.`;
+    nota.hidden = false;
+  }
+}
+
+// Devuelve el historial (o null si falló) para poder prellenar el formulario.
 async function cargarHistorialMetricas() {
   const contenedor = document.getElementById("metricaHistorial");
-  if (!contenedor) return;
+  if (!contenedor) return null;
 
   try {
     const historial = await obtenerHistorialMetricas();
     renderHistorialMetricas(historial);
+    return historial;
   } catch (error) {
     contenedor.innerHTML = `<p class="footer-note">${esc(error.message)}</p>`;
+    return null;
   }
 }
 
@@ -912,6 +977,7 @@ async function cargarRutina() {
 
   usuarioActual = result.usuario || usuarioActual;
   rutina = result.rutina;
+  misRutinas = result.rutinas || [];
   marcasSemana = new Set(result.marcas || []);
   semanaMarcas = semana;
 
@@ -933,9 +999,37 @@ async function cargarRutina() {
   render();
 }
 
+// --- Rutina activa: se elige en el encabezado y queda guardada en la cuenta
+// hasta que se cambie (también desde otros dispositivos). ---
+
+function renderSelectorRutina() {
+  selectorRutinaEl.hidden = !misRutinas.length;
+  rutinaActivaSelect.innerHTML = misRutinas
+    .map((r) => `<option value="${r.id}" ${r.activa ? "selected" : ""}>${esc(r.nombre)}</option>`)
+    .join("");
+  rutinaActivaSelect.disabled = misRutinas.length < 2;
+}
+
+async function activarRutina(rutinaId) {
+  try {
+    await api("activarRutina", { rutina_id: rutinaId });
+    semanaDiaElegido = null; // mostrar el día que toca en la rutina nueva
+    selectedEditorDay = 0;
+    await cargarRutina();
+    if (editor.classList.contains("open")) renderEditor();
+  } catch (error) {
+    renderSelectorRutina();
+    avisar(error.message);
+  }
+}
+
+rutinaActivaSelect.addEventListener("change", () => activarRutina(Number(rutinaActivaSelect.value)));
+gestionarRutinasButton.addEventListener("click", () => abrirMiCuenta("rutinas"));
+
 function render() {
   tabs.innerHTML = "";
   content.innerHTML = "";
+  renderSelectorRutina();
 
   if (currentDayIndex >= rutina.length) {
     currentDayIndex = Math.max(0, rutina.length - 1);
@@ -1965,7 +2059,7 @@ personaButton.addEventListener("click", () => {
 
 // --- Mi cuenta: datos, cambiar contraseña y cerrar sesión ---
 
-function abrirMiCuenta() {
+function abrirMiCuenta(tabInicial = "datos") {
   if (!usuarioActual) return;
   const pideActual = usuarioActual.tienePassword !== false;
 
@@ -1984,7 +2078,7 @@ function abrirMiCuenta() {
       <div class="tabs mi-cuenta-tabs" role="tablist">
         <button type="button" class="tab active" role="tab" data-cuenta-tab="datos">Datos</button>
         <button type="button" class="tab" role="tab" data-cuenta-tab="password">Contraseña</button>
-        ${usuarioActual.rol === "admin" ? "" : `<button type="button" class="tab" role="tab" data-cuenta-tab="compartir">Compartir rutina</button>`}
+        ${usuarioActual.rol === "admin" ? "" : `<button type="button" class="tab" role="tab" data-cuenta-tab="rutinas">Rutinas</button>`}
       </div>
 
       <form id="cambiarNombreForm" class="mi-cuenta-panel" data-cuenta-panel="datos">
@@ -2018,9 +2112,9 @@ function abrirMiCuenta() {
       ${
         usuarioActual.rol === "admin"
           ? ""
-          : `<section id="rutinaCompartida" class="mi-cuenta-panel" data-cuenta-panel="compartir" hidden>
-              <p class="footer-note">Cargando rutina compartida…</p>
-            </section>`
+          : `<div id="panelRutinas" class="mi-cuenta-panel" data-cuenta-panel="rutinas" hidden>
+              <p class="footer-note">Cargando tus rutinas…</p>
+            </div>`
       }
 
       <button type="button" class="small danger mi-cuenta-salir" id="miCuentaCerrarSesion">Cerrar sesión</button>
@@ -2028,22 +2122,23 @@ function abrirMiCuenta() {
   `;
   modal.classList.add("open");
 
-  // Pestañas: se ve una sección a la vez. La de compartir se carga la
+  // Pestañas: se ve una sección a la vez. La de rutinas se carga la
   // primera vez que se abre (genera el código si todavía no existe).
-  let compartirCargado = false;
-  modalBody.querySelectorAll("[data-cuenta-tab]").forEach((boton) => {
-    boton.addEventListener("click", () => {
-      const tab = boton.dataset.cuentaTab;
-      modalBody.querySelectorAll("[data-cuenta-tab]").forEach((b) => b.classList.toggle("active", b === boton));
-      modalBody.querySelectorAll("[data-cuenta-panel]").forEach((panel) => {
-        panel.hidden = panel.dataset.cuentaPanel !== tab;
-      });
-      if (tab === "compartir" && !compartirCargado) {
-        compartirCargado = true;
-        cargarRutinaCompartida();
-      }
+  let rutinasCargadas = false;
+  const mostrarTab = (tab) => {
+    modalBody.querySelectorAll("[data-cuenta-tab]").forEach((b) => b.classList.toggle("active", b.dataset.cuentaTab === tab));
+    modalBody.querySelectorAll("[data-cuenta-panel]").forEach((panel) => {
+      panel.hidden = panel.dataset.cuentaPanel !== tab;
     });
+    if (tab === "rutinas" && !rutinasCargadas) {
+      rutinasCargadas = true;
+      cargarPanelRutinas();
+    }
+  };
+  modalBody.querySelectorAll("[data-cuenta-tab]").forEach((boton) => {
+    boton.addEventListener("click", () => mostrarTab(boton.dataset.cuentaTab));
   });
+  if (modalBody.querySelector(`[data-cuenta-tab="${tabInicial}"]`)) mostrarTab(tabInicial);
 
   const form = document.getElementById("cambiarPasswordForm");
   const mensaje = document.getElementById("cambiarPasswordMensaje");
@@ -2114,63 +2209,180 @@ function abrirMiCuenta() {
   });
 }
 
-// --- Rutina compartida: código para invitar y unirse con un código ---
+// --- Mis rutinas: elegir la activa, crear, renombrar, salir, compartir la
+// activa con un código y unirse a otra con un código. ---
 
-async function cargarRutinaCompartida(accion = "rutinaCompartida") {
-  const seccion = document.getElementById("rutinaCompartida");
-  if (!seccion) return;
+async function cargarPanelRutinas() {
+  const panel = document.getElementById("panelRutinas");
+  if (!panel) return;
 
-  let datos;
+  let compartida;
   try {
-    datos = await api(accion);
+    [misRutinas, compartida] = await Promise.all([
+      api("misRutinas").then((r) => r.rutinas),
+      api("rutinaCompartida"),
+    ]);
   } catch (error) {
-    seccion.innerHTML = `<p class="auth-error">${esc(error.message)}</p>`;
+    panel.innerHTML = `<p class="auth-error">${esc(error.message)}</p>`;
     return;
   }
+  renderSelectorRutina();
 
-  const otros = datos.miembros.filter((m) => m.id !== usuarioActual.id).map((m) => m.nombre);
+  const activa = misRutinas.find((r) => r.activa) || misRutinas[0];
+  const otros = compartida.miembros.filter((m) => m.id !== usuarioActual.id).map((m) => m.nombre);
 
-  seccion.innerHTML = `
-    <h4 class="mi-cuenta-subtitulo">Tu código</h4>
-    <p class="footer-note" style="margin:0;text-align:left">
-      Pasale este código a quien quiera entrenar con tu misma rutina. Cada persona tiene sus propios pesos y marcas,
-      pero si alguien edita la rutina, el cambio lo ven todos.
-    </p>
-    <div class="codigo-rutina">
-      <strong id="codigoRutinaTexto">${esc(datos.codigo)}</strong>
-      <button type="button" class="small" id="copiarCodigoRutina">Copiar</button>
-    </div>
-    <p class="footer-note" style="margin:0 0 8px;text-align:left">
-      ${otros.length ? `La usan también: ${esc(otros.join(", "))}.` : "Por ahora solo la usás vos."}
-    </p>
-    <button type="button" class="small" id="regenerarCodigoRutina">Generar código nuevo</button>
-
-    <form id="unirseRutinaForm" style="margin-top:14px">
-      <h4 class="mi-cuenta-subtitulo">Unirme a otra rutina</h4>
-      <div class="field"><label for="codigoUnirse">Código</label>
-        <input id="codigoUnirse" autocomplete="off" autocapitalize="characters" placeholder="Ej.: K7P2QX" required></div>
-      <p class="auth-error" id="unirseRutinaMensaje" hidden></p>
-      <div class="form-actions" style="margin-top:8px">
-        <button type="submit" class="main-btn" id="unirseRutinaBoton">Unirme</button>
+  panel.innerHTML = `
+    <section>
+      <h4 class="mi-cuenta-subtitulo">Mis rutinas</h4>
+      <p class="footer-note" style="margin:0;text-align:left">
+        Entrenás con la rutina activa hasta que elijas otra. Tus pesos se comparten entre rutinas
+        cuando el ejercicio se llama igual.
+      </p>
+      <div class="mis-rutinas">
+        ${misRutinas
+          .map(
+            (r) => `
+              <div class="mis-rutinas-item${r.activa ? " activa" : ""}" data-rutina-id="${r.id}">
+                <div>
+                  <strong>${esc(r.nombre)}</strong>${r.activa ? '<span class="etiqueta-activa">activa</span>' : ""}
+                  <div class="meta">${r.dias} día${r.dias === 1 ? "" : "s"}${
+                    r.compartidaCon.length ? ` · con ${esc(r.compartidaCon.join(", "))}` : ""
+                  }</div>
+                </div>
+                <div class="mis-rutinas-acciones">
+                  ${r.activa ? "" : `<button type="button" class="small" data-accion="usar">Usar</button>`}
+                  <button type="button" class="small" data-accion="renombrar">Renombrar</button>
+                  ${misRutinas.length > 1 ? `<button type="button" class="small danger" data-accion="salir">Salir</button>` : ""}
+                </div>
+              </div>
+            `
+          )
+          .join("")}
       </div>
-    </form>
+      <button type="button" class="small" id="nuevaRutinaButton">${icon("plus")} Nueva rutina vacía</button>
+      <p class="footer-note" style="margin:6px 0 0;text-align:left">Para crear una desde un PDF, usá "Importar PDF" en Editar rutina.</p>
+    </section>
+
+    <section>
+      <h4 class="mi-cuenta-subtitulo">Compartir "${esc(activa ? activa.nombre : "")}"</h4>
+      <p class="footer-note" style="margin:0;text-align:left">
+        Pasale este código a quien quiera entrenar con esta rutina. Cada persona tiene sus propios pesos y marcas,
+        pero si alguien edita la rutina, el cambio lo ven todos.
+      </p>
+      <div class="codigo-rutina">
+        <strong>${esc(compartida.codigo)}</strong>
+        <button type="button" class="small" id="copiarCodigoRutina">Copiar</button>
+      </div>
+      <p class="footer-note" style="margin:0 0 8px;text-align:left">
+        ${otros.length ? `La usan también: ${esc(otros.join(", "))}.` : "Por ahora solo la usás vos."}
+      </p>
+      <button type="button" class="small" id="regenerarCodigoRutina">Generar código nuevo</button>
+    </section>
+
+    <section>
+      <form id="unirseRutinaForm">
+        <h4 class="mi-cuenta-subtitulo">Agregar una rutina con un código</h4>
+        <div class="field"><label for="codigoUnirse">Código</label>
+          <input id="codigoUnirse" autocomplete="off" autocapitalize="characters" placeholder="Ej.: K7P2QX" required></div>
+        <p class="auth-error" id="unirseRutinaMensaje" hidden></p>
+        <div class="form-actions" style="margin-top:8px">
+          <button type="submit" class="main-btn" id="unirseRutinaBoton">Agregar</button>
+        </div>
+      </form>
+    </section>
   `;
+
+  // Después de cualquier cambio: recargar la app y volver a pintar el panel.
+  const refrescar = async ({ cambioActiva = false } = {}) => {
+    if (cambioActiva) {
+      semanaDiaElegido = null;
+      selectedEditorDay = 0;
+    }
+    await cargarRutina();
+    await cargarPanelRutinas();
+  };
+
+  panel.querySelectorAll(".mis-rutinas-item").forEach((item) => {
+    const r = misRutinas.find((x) => String(x.id) === item.dataset.rutinaId);
+    if (!r) return;
+
+    item.querySelector('[data-accion="usar"]')?.addEventListener("click", async () => {
+      try {
+        await api("activarRutina", { rutina_id: r.id });
+        await refrescar({ cambioActiva: true });
+      } catch (error) {
+        avisar(error.message);
+      }
+    });
+
+    item.querySelector('[data-accion="renombrar"]').addEventListener("click", async () => {
+      const nombre = await pedirTexto(
+        r.compartidaCon.length ? "Nuevo nombre (lo ven también quienes la comparten):" : "Nuevo nombre:",
+        { titulo: "Renombrar rutina", valor: r.nombre }
+      );
+      if (!nombre || nombre === r.nombre) return;
+      try {
+        await api("renombrarRutina", { rutina_id: r.id, nombre });
+        await refrescar();
+      } catch (error) {
+        avisar(error.message);
+      }
+    });
+
+    item.querySelector('[data-accion="salir"]')?.addEventListener("click", async () => {
+      const ok = await confirmar(
+        `"${r.nombre}" deja de aparecer en tu lista. No se borra: ` +
+          (r.compartidaCon.length ? "los demás la siguen usando y " : "") +
+          "el admin te la puede volver a asignar. Tus pesos se conservan.",
+        { titulo: "¿Salir de esta rutina?", textoAceptar: "Salir", peligro: true }
+      );
+      if (!ok) return;
+      try {
+        await api("salirDeRutina", { rutina_id: r.id });
+        await refrescar({ cambioActiva: r.activa });
+      } catch (error) {
+        avisar(error.message);
+      }
+    });
+  });
+
+  document.getElementById("nuevaRutinaButton").addEventListener("click", async () => {
+    const nombre = await pedirTexto("Nombre de la rutina nueva:", {
+      titulo: "Nueva rutina",
+      valor: "Mi rutina",
+      textoAceptar: "Crear",
+    });
+    if (!nombre) return;
+    try {
+      await api("crearRutina", { nombre });
+      await refrescar({ cambioActiva: true });
+      avisar(`Listo, "${nombre}" es tu rutina activa. Agregale días desde "Editar rutina".`);
+    } catch (error) {
+      avisar(error.message);
+    }
+  });
 
   document.getElementById("copiarCodigoRutina").addEventListener("click", async (event) => {
     try {
-      await navigator.clipboard.writeText(datos.codigo);
+      await navigator.clipboard.writeText(compartida.codigo);
       event.target.textContent = "¡Copiado!";
     } catch {
-      avisar(`El código es ${datos.codigo}.`);
+      avisar(`El código es ${compartida.codigo}.`);
     }
   });
 
   document.getElementById("regenerarCodigoRutina").addEventListener("click", async () => {
     const ok = await confirmar(
-      "Se genera un código nuevo y el actual deja de servir. Quienes ya usan tu rutina la siguen usando.",
+      "Se genera un código nuevo y el actual deja de servir. Quienes ya usan esta rutina la siguen usando.",
       { titulo: "Generar código nuevo", textoAceptar: "Generar" }
     );
-    if (ok) cargarRutinaCompartida("regenerarCodigoRutina");
+    if (!ok) return;
+    try {
+      await api("regenerarCodigoRutina");
+      await cargarPanelRutinas();
+    } catch (error) {
+      avisar(error.message);
+    }
   });
 
   const form = document.getElementById("unirseRutinaForm");
@@ -2183,20 +2395,11 @@ async function cargarRutinaCompartida(accion = "rutinaCompartida") {
     mensaje.hidden = true;
     if (!codigo) return;
 
-    const ok = await confirmar(
-      "Vas a dejar de ver tu rutina actual y pasar a usar la del código. Tu rutina actual y los pesos " +
-        "que registraste en ella no se borran: el admin te la puede volver a asignar.",
-      { titulo: "¿Unirte a esa rutina?", textoAceptar: "Unirme" }
-    );
-    if (!ok) return;
-
     boton.disabled = true;
     try {
       await api("unirseARutina", { codigo });
-      closeVideo();
-      semanaDiaElegido = null;
-      await cargarRutina();
-      avisar("Listo, ya estás usando la rutina compartida.");
+      await refrescar({ cambioActiva: true });
+      avisar("Listo, la rutina se agregó a tu lista y quedó como activa. Tus otras rutinas siguen ahí.");
     } catch (error) {
       mensaje.textContent = error.message;
       mensaje.hidden = false;
@@ -2204,6 +2407,7 @@ async function cargarRutinaCompartida(accion = "rutinaCompartida") {
     }
   });
 }
+
 progresoButton.addEventListener("click", mostrarInfo);
 diasButton.addEventListener("click", () => showDay(currentDayIndex));
 
