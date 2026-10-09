@@ -76,7 +76,7 @@ async function usuarioDesdeRequest(request) {
   if (!token) return null;
 
   const filas = await db.sql`
-    SELECT u.id, u.email, u.nombre, u.rol, (u.password_hash IS NOT NULL) AS tiene_password
+    SELECT u.id, u.email, u.nombre, u.rol, u.tema, (u.password_hash IS NOT NULL) AS tiene_password
     FROM sesiones s
     JOIN usuarios u ON u.id = s.usuario_id
     WHERE s.id = ${token} AND s.expires_at > NOW()
@@ -89,6 +89,7 @@ async function usuarioDesdeRequest(request) {
     nombre: filas[0].nombre,
     rol: filas[0].rol || "usuario",
     tienePassword: Boolean(filas[0].tiene_password),
+    tema: filas[0].tema,
     token,
   };
 }
@@ -200,6 +201,10 @@ async function crearRutinaPropia(usuarioId) {
   return rutinaId;
 }
 
+// Paletas de color disponibles (deben coincidir con TEMAS en public/js/app.js
+// y con el CHECK de la columna usuarios.tema).
+const TEMAS_VALIDOS = ["rosa", "indigo", "petroleo", "grafito"];
+
 function datosPublicosUsuario(usuario) {
   const datos = {
     id: usuario.id,
@@ -208,6 +213,7 @@ function datosPublicosUsuario(usuario) {
     rol: usuario.rol || "usuario",
   };
   if (usuario.tienePassword !== undefined) datos.tienePassword = usuario.tienePassword;
+  if (usuario.tema !== undefined) datos.tema = usuario.tema;
   return datos;
 }
 
@@ -938,6 +944,13 @@ export default async (request) => {
 
     const usuario = await usuarioDesdeRequest(request);
     if (!usuario) return respuesta({ ok: false, error: "No autorizado." }, 401);
+
+    if (action === "guardarTema") {
+      const tema = String(body.tema ?? "");
+      if (!TEMAS_VALIDOS.includes(tema)) return respuesta({ error: "Esa paleta no existe." }, 400);
+      await db.sql`UPDATE usuarios SET tema = ${tema} WHERE id = ${usuario.id}`;
+      return respuesta({ ok: true });
+    }
 
     if (action === "actualizarPerfil") {
       // Los pesos y métricas van por usuario_id, así que cambiar el nombre
