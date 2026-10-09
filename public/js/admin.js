@@ -63,7 +63,7 @@
     listaUsuariosEl.innerHTML = usuarios
       .map((u) => {
         const rutinasTxt = u.rutinas.length
-          ? u.rutinas.map((r) => esc(r.nombre)).join(", ")
+          ? u.rutinas.map((r) => `${esc(r.nombre)}${r.activa && u.rutinas.length > 1 ? " (activa)" : ""}`).join(", ")
           : "Sin rutina asignada";
         return `
           <div class="admin-user-card" data-id="${u.id}">
@@ -296,7 +296,7 @@
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
         <button type="button" class="main-btn" id="adminAbrirEditorBtn">${icon("pencil")} Editar rutina</button>
-        <button type="button" class="small" id="adminAsignarRutinaBtn">Crear/asignar otra rutina…</button>
+        <button type="button" class="small" id="adminAsignarRutinaBtn">Agregar o activar rutina…</button>
       </div>
       ${
         totalDias
@@ -625,22 +625,25 @@
       return;
     }
 
-    const actual = rutinas.find((r) => r.usuarios.some((u) => u.id === usuario.id));
+    // Un usuario puede tener varias rutinas; entrena con la activa.
+    const activaId = (usuario.rutinas.find((r) => r.activa) || usuario.rutinas[0] || {}).id;
+    const tiene = new Set(usuario.rutinas.map((r) => r.id));
+    const etiqueta = (r) => (r.id === activaId ? " <em>(activa)</em>" : tiene.has(r.id) ? " <em>(ya la tiene)</em>" : "");
 
     modalBody.innerHTML = `
       <form id="asignarRutinaForm" class="admin-asignar">
         <p class="footer-note" style="margin:0;text-align:left">
-          Elegí la rutina que va a usar ${esc(usuario.nombre)}. Reemplaza la que tiene ahora
-          (esa no se borra: queda en la lista para asignarla de nuevo).
+          Elegí la rutina con la que va a entrenar ${esc(usuario.nombre)}. Se suma a sus rutinas
+          (si no la tenía) y queda como la activa; las otras siguen en su lista.
         </p>
         <div class="admin-asignar-lista">
           ${rutinas
             .map(
               (r) => `
                 <label class="admin-asignar-opcion">
-                  <input type="radio" name="rutinaElegida" value="${r.id}" ${actual && actual.id === r.id ? "checked" : ""}>
+                  <input type="radio" name="rutinaElegida" value="${r.id}" ${r.id === activaId ? "checked" : ""}>
                   <span>
-                    <strong>#${r.id} · ${esc(r.nombre)}</strong>${actual && actual.id === r.id ? " <em>(actual)</em>" : ""}
+                    <strong>#${r.id} · ${esc(r.nombre)}</strong>${etiqueta(r)}
                     <span class="admin-asignar-detalle">Usuarios: ${esc(r.usuarios.map((u) => u.nombre).join(", ") || "ninguno")}</span>
                   </span>
                 </label>
@@ -695,8 +698,8 @@
           }
           closeVideo();
           selectedAdminDay = 0;
-          await cargarRutinaUsuario();
-          cargarUsuarios();
+          await Promise.all([cargarRutinaUsuario(), cargarUsuarios()]);
+          usuarioSeleccionado = usuarios.find((u) => u.id === usuario.id) || usuarioSeleccionado;
           resolve(true);
         } catch (error) {
           errorEl.textContent = error.message;
@@ -793,7 +796,7 @@
 
   // ---------- Mi cuenta / cerrar sesión ----------
 
-  document.getElementById("adminMiCuentaButton").addEventListener("click", abrirMiCuenta);
+  document.getElementById("adminMiCuentaButton").addEventListener("click", () => abrirMiCuenta());
 
   logoutBtn.addEventListener("click", async () => {
     try {
