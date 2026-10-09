@@ -37,6 +37,8 @@ const exerciseFormNota = document.getElementById("exerciseFormNota");
 const exerciseName = document.getElementById("exerciseName");
 const exerciseSeries = document.getElementById("exerciseSeries");
 const exerciseReps = document.getElementById("exerciseReps");
+const exerciseDescanso = document.getElementById("exerciseDescanso");
+const exerciseObservaciones = document.getElementById("exerciseObservaciones");
 const exerciseUrl = document.getElementById("exerciseUrl");
 const cancelExercise = document.getElementById("cancelExercise");
 const buscarWgerButton = document.getElementById("buscarWgerButton");
@@ -1045,6 +1047,26 @@ async function activarRutina(rutinaId) {
 rutinaActivaSelect.addEventListener("change", () => activarRutina(Number(rutinaActivaSelect.value)));
 gestionarRutinasButton.addEventListener("click", () => abrirMiCuenta("rutinas"));
 
+// Notas del entrenador (descanso y observaciones): plegadas, se ven al
+// tocar "Notas". Si el descanso es un tiempo se muestra como "Descanso: …";
+// si no (por ejemplo "Superserie"), tal cual.
+function notasEjercicioHtml(exercise) {
+  const descanso = (exercise.descanso || "").trim();
+  const observaciones = (exercise.observaciones || "").trim();
+  if (!descanso && !observaciones) return "";
+
+  const esTiempo = /\d/.test(descanso);
+  return `
+    <details class="notas-ejercicio">
+      <summary>${icon("chevron-down")} Notas</summary>
+      <div class="notas-ejercicio-cuerpo">
+        ${descanso ? `<p>${esTiempo ? `<b>Descanso:</b> ${esc(descanso)}` : `<b>${esc(descanso)}</b>`}</p>` : ""}
+        ${observaciones ? `<p>${esc(observaciones)}</p>` : ""}
+      </div>
+    </details>
+  `;
+}
+
 function render() {
   tabs.innerHTML = "";
   content.innerHTML = "";
@@ -1111,6 +1133,7 @@ function render() {
             ${exercise.series ? `<span class="pill">${esc(exercise.series)} series</span>` : ""}
             ${exercise.reps ? `<span class="pill">${esc(exercise.reps)} reps</span>` : ""}
           </div>
+          ${notasEjercicioHtml(exercise)}
           <div class="actions">
             ${
               exercise.imageUrl
@@ -1500,6 +1523,8 @@ function openExerciseForm(exercise = null) {
   exerciseName.value = exercise?.name || "";
   exerciseSeries.value = exercise?.series || "";
   exerciseReps.value = exercise?.reps || "";
+  exerciseDescanso.value = exercise?.descanso || "";
+  exerciseObservaciones.value = exercise?.observaciones || "";
   exerciseUrl.value = exercise?.url || "";
   exerciseForm.dataset.exerciseId = exercise?.id ? String(exercise.id) : "";
   exerciseForm.dataset.catalogoId = "";
@@ -1519,6 +1544,8 @@ function openCatalogoForm(item) {
   exerciseName.value = item.name || "";
   exerciseSeries.value = "";
   exerciseReps.value = "";
+  exerciseDescanso.value = "";
+  exerciseObservaciones.value = "";
   exerciseUrl.value = item.url || "";
   exerciseForm.dataset.exerciseId = "";
   exerciseForm.dataset.catalogoId = String(item.id);
@@ -1721,6 +1748,8 @@ function abrirFormularioAsignacion(item) {
       </div>
       <div class="field"><label>Series</label><input id="asignarSeries"></div>
       <div class="field"><label>Repeticiones</label><input id="asignarReps"></div>
+      <div class="field"><label>Descanso (opcional)</label><input id="asignarDescanso" placeholder="Ej.: 90seg o Superserie"></div>
+      <div class="field"><label>Observaciones (opcional)</label><input id="asignarObservaciones" placeholder="Ej.: Por pierna"></div>
       <div class="form-actions">
         <button type="button" class="small" id="asignarCancelar">Cancelar</button>
         <button type="submit" class="main-btn">Agregar al día</button>
@@ -1734,10 +1763,12 @@ function abrirFormularioAsignacion(item) {
     event.preventDefault();
     const series = document.getElementById("asignarSeries").value.trim();
     const repeticiones = document.getElementById("asignarReps").value.trim();
+    const descanso = document.getElementById("asignarDescanso").value.trim();
+    const observaciones = document.getElementById("asignarObservaciones").value.trim();
     const day = rutina[selectedEditorDay];
 
     try {
-      await api("createExercise", { dia_id: day.id, catalogo_id: item.id, series, repeticiones });
+      await api("createExercise", { dia_id: day.id, catalogo_id: item.id, series, repeticiones, descanso, observaciones });
       closeVideo();
       await cargarRutina();
       renderEditor();
@@ -1961,6 +1992,8 @@ exerciseForm.addEventListener("submit", async (event) => {
   const nombre = exerciseName.value.trim();
   const series = exerciseSeries.value.trim();
   const repeticiones = exerciseReps.value.trim();
+  const descanso = exerciseDescanso.value.trim();
+  const observaciones = exerciseObservaciones.value.trim();
   const videoUrl = exerciseUrl.value.trim();
   const imageUrl = exerciseForm.dataset.imageUrl || "";
   const wgerId = exerciseForm.dataset.wgerId || "";
@@ -1987,6 +2020,8 @@ exerciseForm.addEventListener("submit", async (event) => {
         nombre,
         series,
         repeticiones,
+        descanso,
+        observaciones,
         video_url: videoUrl,
         image_url: imageUrl,
         wger_id: wgerId
@@ -1998,6 +2033,8 @@ exerciseForm.addEventListener("submit", async (event) => {
         nombre,
         series,
         repeticiones,
+        descanso,
+        observaciones,
         video_url: videoUrl,
         image_url: imageUrl,
         wger_id: wgerId
