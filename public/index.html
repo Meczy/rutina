@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
     <meta name="theme-color" content="#0b1020">
     <title>MecFit{{ENV_LABEL}}</title>
-    <link rel="preload" href="icons/sprite.svg" as="image" type="image/svg+xml">
+    <link rel="preload" href="icons/sprite.svg?v=2" as="image" type="image/svg+xml">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icons/icon-192.png">
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -21,7 +21,7 @@
 <body>
     <div class="auth-screen" id="authScreen" hidden>
         <div class="auth-card">
-            <h1><svg class="icon icon-lg" aria-hidden="true"><use href="icons/sprite.svg#dumbbell"></use></svg> MecFit{{ENV_LABEL}}</h1>
+            <h1><svg class="icon icon-lg" aria-hidden="true"><use href="icons/sprite.svg?v=2#dumbbell"></use></svg> MecFit{{ENV_LABEL}}</h1>
             <p class="auth-subtitle">Iniciá sesión para ver tu rutina.</p>
 
             <div id="googleButtonContainer" class="google-button-container"></div>
@@ -50,15 +50,15 @@
     <div class="app" id="appRoot" hidden>
         <nav class="topnav" id="topnav">
             <div class="topnav-inner">
-                <div class="topnav-brand"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#dumbbell"></use></svg> MecFit{{ENV_LABEL}}</div>
+                <div class="topnav-brand"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=2#dumbbell"></use></svg> MecFit{{ENV_LABEL}}</div>
                 <button type="button" class="hamburger" id="navToggle" aria-label="Abrir menú" aria-expanded="false" aria-controls="navLinks">
-                    <svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#menu"></use></svg>
+                    <svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=2#menu"></use></svg>
                 </button>
                 <div class="nav-links" id="navLinks">
-                    <button class="nav-link active" id="diasButton" type="button"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#dumbbell"></use></svg> Rutina</button>
-                    <button class="nav-link" id="progresoButton" type="button"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#chart-column"></use></svg> Progreso</button>
-                    <button class="nav-link" id="editorButton" type="button"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#pencil"></use></svg> Editar rutina</button>
-                    <button class="nav-link" id="personaButton" type="button" aria-label="Mi cuenta" title="Mi cuenta"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#user"></use></svg></button>
+                    <button class="nav-link active" id="diasButton" type="button"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=2#dumbbell"></use></svg> Rutina</button>
+                    <button class="nav-link" id="progresoButton" type="button"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=2#chart-column"></use></svg> Progreso</button>
+                    <button class="nav-link" id="editorButton" type="button"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=2#pencil"></use></svg> Editar rutina</button>
+                    <button class="nav-link" id="personaButton" type="button" aria-label="Mi cuenta" title="Mi cuenta"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=2#user"></use></svg></button>
                 </div>
             </div>
         </nav>
@@ -66,11 +66,11 @@
             <div
                 style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;position:relative;z-index:1">
                 <div>
-                    <h1><svg class="icon icon-lg" aria-hidden="true"><use href="icons/sprite.svg#dumbbell"></use></svg> MecFit{{ENV_LABEL}}</h1>
+                    <h1><svg class="icon icon-lg" aria-hidden="true"><use href="icons/sprite.svg?v=2#dumbbell"></use></svg> MecFit{{ENV_LABEL}}</h1>
                     <p>Tu entrenamiento en un solo lugar.</p>
                 </div>
             </div>
-            <button class="install-btn" id="installButton" hidden><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#download"></use></svg> Instalar app</button>
+            <button class="install-btn" id="installButton" hidden><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=2#download"></use></svg> Instalar app</button>
             <div class="stats">
                 <div class="stat"><strong id="totalDays">0</strong>Días</div>
                 <div class="stat"><strong id="totalExercises">0</strong>Ejercicios</div>
@@ -95,7 +95,7 @@
         <header class="hero">
             <div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;position:relative;z-index:1">
                 <div>
-                    <h1><svg class="icon icon-lg" aria-hidden="true"><use href="icons/sprite.svg#user"></use></svg> Panel de administración</h1>
+                    <h1><svg class="icon icon-lg" aria-hidden="true"><use href="icons/sprite.svg?v=2#user"></use></svg> Panel de administración</h1>
                     <p>Usuarios, rutinas y progreso.</p>
                 </div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;position:relative;z-index:1">
@@ -137,7 +137,7 @@
     <div class="modal" id="modal">
         <div class="modal-card">
             <div class="modal-top">
-                <div class="modal-title" id="modalTitle">Video</div><button class="close" id="close" aria-label="Cerrar"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#x"></use></svg></button>
+                <div class="modal-title" id="modalTitle">Video</div><button class="close" id="close" aria-label="Cerrar"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=2#x"></use></svg></button>
             </div>
             <div id="modalBody"></div>
         </div>
@@ -145,13 +145,13 @@
     <div class="editor" id="editor">
         <div class="editor-panel">
             <div class="editor-head">
-                <h2>Editar rutina</h2><button class="small" id="closeEditor"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#x"></use></svg> Cerrar</button>
+                <h2>Editar rutina</h2><button class="small" id="closeEditor"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=2#x"></use></svg> Cerrar</button>
             </div>
             <div class="toolbar">
-                <button class="main-btn" id="addDay"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#plus"></use></svg> Nuevo día</button>
-                <button class="small" id="importarPdfButton"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#upload"></use></svg> Importar PDF</button>
-                <button class="small" id="verCatalogoButton"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#dumbbell"></use></svg> Catálogo de ejercicios</button>
-                <button class="small" id="exportData"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#save"></use></svg> Exportar respaldo</button>
+                <button class="main-btn" id="addDay"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=2#plus"></use></svg> Nuevo día</button>
+                <button class="small" id="importarPdfButton"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=2#upload"></use></svg> Importar PDF</button>
+                <button class="small" id="verCatalogoButton"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=2#dumbbell"></use></svg> Catálogo de ejercicios</button>
+                <button class="small" id="exportData"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=2#save"></use></svg> Exportar respaldo</button>
             </div>
             <p style="color:#667085">Selecciona un día, cambia su número y nombre, y arrastra los ejercicios para
                 cambiar el orden.</p>
@@ -163,7 +163,7 @@
         <div class="form-card">
             <h3 id="formTitle">Agregar ejercicio</h3>
             <p class="footer-note" id="exerciseFormNota" hidden style="margin:-4px 0 10px">El nombre, la imagen y el video son de este ejercicio en tu catálogo: si los cambiás acá, se actualizan en todos los días donde lo uses.</p>
-            <button type="button" class="small" id="buscarWgerButton"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#search"></use></svg> Buscar
+            <button type="button" class="small" id="buscarWgerButton"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=2#search"></use></svg> Buscar
                 en librería de ejercicios (wger)</button>
             <div class="wger-preview" id="wgerPreview">
                 <div class="wger-thumb" id="wgerThumb"><img id="wgerPreviewImg" alt="Imagen del ejercicio" hidden><svg
@@ -191,11 +191,11 @@
         <div class="editor-panel">
             <div class="editor-head">
                 <h2 id="adminEditorTitle">Editar rutina</h2>
-                <button class="small" id="closeAdminEditor"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#x"></use></svg> Cerrar</button>
+                <button class="small" id="closeAdminEditor"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=2#x"></use></svg> Cerrar</button>
             </div>
             <div class="toolbar">
-                <button class="main-btn" id="adminAddDay"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#plus"></use></svg> Nuevo día</button>
-                <button class="small" id="adminImportarPdfBtn"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg#upload"></use></svg> Importar PDF</button>
+                <button class="main-btn" id="adminAddDay"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=2#plus"></use></svg> Nuevo día</button>
+                <button class="small" id="adminImportarPdfBtn"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=2#upload"></use></svg> Importar PDF</button>
                 <button class="small" id="adminCambiarRutinaBtn">Agregar o activar rutina…</button>
             </div>
             <div class="editor-tabs" id="adminEditorTabs"></div>
