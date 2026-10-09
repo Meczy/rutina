@@ -1,5 +1,4 @@
 const DONE_PREFIX = "mi-rutina-done-";
-const LAST_DAY_KEY = "mi-rutina-ultimo-dia";
 
 // Íconos como SVG en línea (en vez de emojis) para los botones de
 // imagen/video en cada tarjeta de ejercicio.
@@ -21,7 +20,7 @@ let rutina = [];
 let selectedEditorDay = 0;
 let currentDayIndex = 0;
 let vista = "dias";
-let diaRestaurado = false;
+let semanaDiaElegido = null; // semana para la que ya se eligió el día a mostrar
 
 const tabs = document.getElementById("tabs");
 const tabsWrap = document.getElementById("tabsWrap");
@@ -78,6 +77,175 @@ function icon(nombre, clase = "") {
   return `<svg class="icon ${clase}" aria-hidden="true"><use href="/icons/sprite.svg#${nombre}"></use></svg>`;
 }
 
+// --- Diálogos propios (en vez de alert/confirm/prompt del navegador, que en
+// el celular se ven mal o directamente no aparecen en la app instalada).
+// Van en su propia capa (#dialogo), por encima del modal y del editor. ---
+
+let cerrarDialogoActual = null;
+
+function abrirDialogo({ titulo = "", html, alAbrir, valorAlCancelar = null }) {
+  const capa = document.getElementById("dialogo");
+  if (cerrarDialogoActual) cerrarDialogoActual(null);
+
+  return new Promise((resolve) => {
+    capa.innerHTML = `
+      <form class="dialogo-card" novalidate>
+        ${titulo ? `<h3 class="dialogo-titulo">${esc(titulo)}</h3>` : ""}
+        ${html}
+      </form>
+    `;
+    capa.hidden = false;
+
+    const form = capa.querySelector("form");
+    const cerrar = (valor) => {
+      if (cerrarDialogoActual !== cerrar) return;
+      cerrarDialogoActual = null;
+      capa.hidden = true;
+      capa.innerHTML = "";
+      document.removeEventListener("keydown", alPresionarTecla);
+      resolve(valor);
+    };
+    const alPresionarTecla = (event) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        cerrar(valorAlCancelar);
+      }
+    };
+
+    cerrarDialogoActual = cerrar;
+    document.addEventListener("keydown", alPresionarTecla);
+    form.querySelectorAll("[data-dialogo-cancelar]").forEach((b) =>
+      b.addEventListener("click", () => cerrar(valorAlCancelar))
+    );
+    alAbrir(form, cerrar);
+  });
+}
+
+function avisar(mensaje, { titulo = "" } = {}) {
+  return abrirDialogo({
+    titulo,
+    html: `
+      <p class="dialogo-mensaje">${esc(mensaje)}</p>
+      <div class="form-actions"><button type="submit" class="main-btn">Entendido</button></div>
+    `,
+    valorAlCancelar: undefined,
+    alAbrir(form, cerrar) {
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        cerrar(undefined);
+      });
+      form.querySelector("button[type=submit]").focus();
+    },
+  });
+}
+
+// Devuelve true/false. Con peligro: true el botón de aceptar se ve rojo.
+function confirmar(mensaje, { titulo = "", textoAceptar = "Aceptar", peligro = false } = {}) {
+  return abrirDialogo({
+    titulo,
+    html: `
+      <p class="dialogo-mensaje">${esc(mensaje)}</p>
+      <div class="form-actions">
+        <button type="button" class="small" data-dialogo-cancelar>Cancelar</button>
+        <button type="submit" class="${peligro ? "main-btn peligro" : "main-btn"}">${esc(textoAceptar)}</button>
+      </div>
+    `,
+    valorAlCancelar: false,
+    alAbrir(form, cerrar) {
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        cerrar(true);
+      });
+      form.querySelector("button[type=submit]").focus();
+    },
+  });
+}
+
+// Devuelve el texto escrito (sin espacios de más) o null si se cancela.
+function pedirTexto(mensaje, { titulo = "", valor = "", textoAceptar = "Guardar", obligatorio = true } = {}) {
+  return abrirDialogo({
+    titulo,
+    html: `
+      <label class="dialogo-mensaje" for="dialogoTexto">${esc(mensaje)}</label>
+      <input id="dialogoTexto" class="dialogo-input" value="${esc(valor)}" autocomplete="off">
+      <p class="auth-error" hidden></p>
+      <div class="form-actions">
+        <button type="button" class="small" data-dialogo-cancelar>Cancelar</button>
+        <button type="submit" class="main-btn">${esc(textoAceptar)}</button>
+      </div>
+    `,
+    alAbrir(form, cerrar) {
+      const input = form.querySelector("input");
+      const error = form.querySelector(".auth-error");
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const texto = input.value.trim();
+        if (obligatorio && !texto) {
+          error.textContent = "Escribí algo antes de guardar.";
+          error.hidden = false;
+          return;
+        }
+        cerrar(texto);
+      });
+      input.focus();
+      input.select();
+    },
+  });
+}
+
+// Formulario de peso: viene cargado con el último peso y tiene botones de
+// −2,5 / +2,5 kg. Devuelve el número elegido o null si se cancela.
+function pedirPeso({ titulo, detalle = "", valor = "" }) {
+  return abrirDialogo({
+    titulo,
+    html: `
+      ${detalle ? `<p class="dialogo-mensaje">${esc(detalle)}</p>` : ""}
+      <div class="peso-control">
+        <button type="button" class="small peso-paso" data-paso="-2.5">−2,5</button>
+        <div class="peso-campo">
+          <input id="dialogoPeso" class="dialogo-input" inputmode="decimal" autocomplete="off"
+            value="${valor === "" ? "" : esc(formatPeso(valor))}" placeholder="0" aria-label="Peso en kg">
+          <span>kg</span>
+        </div>
+        <button type="button" class="small peso-paso" data-paso="2.5">+2,5</button>
+      </div>
+      <p class="auth-error" hidden></p>
+      <div class="form-actions">
+        <button type="button" class="small" data-dialogo-cancelar>Cancelar</button>
+        <button type="submit" class="main-btn">Guardar</button>
+      </div>
+    `,
+    alAbrir(form, cerrar) {
+      const input = form.querySelector("input");
+      const error = form.querySelector(".auth-error");
+      const leer = () => Number(input.value.replace(",", ".").trim());
+
+      form.querySelectorAll(".peso-paso").forEach((boton) => {
+        boton.addEventListener("click", () => {
+          const actual = Number.isFinite(leer()) ? leer() : 0;
+          const nuevo = Math.max(0, Math.round((actual + Number(boton.dataset.paso)) * 100) / 100);
+          input.value = formatPeso(nuevo);
+          error.hidden = true;
+        });
+      });
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const peso = leer();
+        if (!input.value.trim() || !Number.isFinite(peso) || peso <= 0 || peso > 999) {
+          error.textContent = "Ingresá un peso válido mayor a 0.";
+          error.hidden = false;
+          return;
+        }
+        cerrar(peso);
+      });
+
+      input.focus();
+      input.select();
+    },
+  });
+}
+
 function youtubeEmbed(url) {
   const match = (url || "").match(
     /(?:youtube\.com\/(?:shorts\/|watch\?v=)|youtu\.be\/)([A-Za-z0-9_-]{6,})/
@@ -117,8 +285,13 @@ function inicioSemana() {
   return local.toISOString().slice(0, 10);
 }
 
-function guardarUltimoDia(day) {
-  if (day) localStorage.setItem(LAST_DAY_KEY, String(day.id));
+// Día que te toca: el primero de la semana que todavía no completaste
+// (según las marcas). Si ya completaste todos, el último.
+function indiceDiaQueToca() {
+  const pendiente = rutina.findIndex(
+    (d) => d.ejercicios.length && !d.ejercicios.every((e) => marcasSemana.has(e.id))
+  );
+  return pendiente >= 0 ? pendiente : Math.max(0, rutina.length - 1);
 }
 
 // --- Marcas de "hecho": se guardan en el servidor por semana (lunes), así
@@ -174,7 +347,7 @@ async function marcarEjercicio(exercise, hecho) {
     if (hecho) marcasSemana.delete(exercise.id);
     else marcasSemana.add(exercise.id);
     render();
-    alert(error.message);
+    avisar(error.message);
   }
 }
 
@@ -214,7 +387,7 @@ function actualizarPersonaButton() {
 }
 
 async function cerrarSesion() {
-  if (!confirm("¿Cerrar sesión?")) return;
+  if (!(await confirmar("¿Querés cerrar sesión?", { textoAceptar: "Cerrar sesión" }))) return;
   try {
     await fetch("/api/rutina", {
       method: "POST",
@@ -226,23 +399,21 @@ async function cerrarSesion() {
   }
   usuarioActual = null;
   rutina = [];
+  semanaDiaElegido = null;
   mostrarPantallaLogin();
 }
 
 async function registrarPeso(exercise) {
   if (!usuarioActual) return;
   const previo = (exercise.pesos || []).find(esMiPeso);
-  const entrada = prompt(
-    `¿Cuánto peso usaste hoy en "${exercise.name}"? (kg)`,
-    previo ? String(previo.peso) : ""
-  );
-  if (entrada === null) return;
-
-  const peso = Number(String(entrada).replace(",", "."));
-  if (!Number.isFinite(peso) || peso <= 0) {
-    alert("Ingresá un número válido mayor a 0.");
-    return;
-  }
+  const peso = await pedirPeso({
+    titulo: exercise.name,
+    detalle: previo
+      ? `¿Cuánto peso usaste hoy? La última vez (${formatFecha(previo.fecha)}) fueron ${formatPeso(previo.peso)} kg.`
+      : "¿Cuánto peso usaste hoy?",
+    valor: previo ? previo.peso : "",
+  });
+  if (peso === null) return;
 
   try {
     const response = await fetch("/api/rutina", {
@@ -264,7 +435,7 @@ async function registrarPeso(exercise) {
     rutina = result.rutina;
     render();
   } catch (error) {
-    alert(error.message);
+    avisar(error.message);
   }
 }
 
@@ -292,7 +463,7 @@ async function verHistorialPeso(exercise, persona) {
     renderHistorialPeso(exercise, persona, historial);
     modal.classList.add("open");
   } catch (error) {
-    alert(error.message);
+    avisar(error.message);
   }
 }
 
@@ -343,17 +514,12 @@ function renderHistorialPeso(exercise, persona, historial) {
 
     row.querySelector(".history-edit").addEventListener("click", async () => {
       const actual = historial.find((h) => h.id === id);
-      const entrada = prompt(
-        `Nuevo peso para el ${formatFecha(actual.fecha)} (kg)`,
-        String(actual.peso)
-      );
-      if (entrada === null) return;
-
-      const peso = Number(String(entrada).replace(",", "."));
-      if (!Number.isFinite(peso) || peso <= 0) {
-        alert("Ingresá un número válido mayor a 0.");
-        return;
-      }
+      const peso = await pedirPeso({
+        titulo: exercise.name,
+        detalle: `Nuevo peso para el ${formatFecha(actual.fecha)}.`,
+        valor: actual.peso,
+      });
+      if (peso === null) return;
 
       try {
         const response = await fetch("/api/rutina", {
@@ -370,13 +536,13 @@ function renderHistorialPeso(exercise, persona, historial) {
         const historialActualizado = await obtenerHistorialPeso(exercise, persona);
         renderHistorialPeso(exercise, persona, historialActualizado);
       } catch (error) {
-        alert(error.message);
+        avisar(error.message);
       }
     });
 
     row.querySelector(".history-delete").addEventListener("click", async () => {
       const actual = historial.find((h) => h.id === id);
-      if (!confirm(`¿Eliminar el peso del ${formatFecha(actual.fecha)}?`)) return;
+      if (!(await confirmar(`¿Eliminar el peso del ${formatFecha(actual.fecha)}?`, { textoAceptar: "Eliminar", peligro: true }))) return;
 
       try {
         const response = await fetch("/api/rutina", {
@@ -393,7 +559,7 @@ function renderHistorialPeso(exercise, persona, historial) {
         const historialActualizado = await obtenerHistorialPeso(exercise, persona);
         renderHistorialPeso(exercise, persona, historialActualizado);
       } catch (error) {
-        alert(error.message);
+        avisar(error.message);
       }
     });
   });
@@ -472,7 +638,7 @@ async function renderInfoTab() {
     const agua = aguaInput.value === "" ? null : Number(String(aguaInput.value).replace(",", "."));
 
     if (!Number.isFinite(peso) || peso <= 0) {
-      alert("Ingresá un peso válido mayor a 0.");
+      avisar("Ingresá un peso válido mayor a 0.");
       return;
     }
 
@@ -498,7 +664,7 @@ async function renderInfoTab() {
       fechaInput.value = fechaHoy();
       await cargarHistorialMetricas();
     } catch (error) {
-      alert(error.message);
+      avisar(error.message);
     }
   });
 
@@ -689,7 +855,7 @@ function renderHistorialMetricas(historial) {
     });
 
     row.querySelector(".metrica-delete").addEventListener("click", async () => {
-      if (!confirm(`¿Eliminar el registro del ${formatFecha(registro.fecha)}?`)) return;
+      if (!(await confirmar(`¿Eliminar el registro del ${formatFecha(registro.fecha)}?`, { textoAceptar: "Eliminar", peligro: true }))) return;
 
       try {
         const response = await fetch("/api/rutina", {
@@ -703,7 +869,7 @@ function renderHistorialMetricas(historial) {
         }
         await cargarHistorialMetricas();
       } catch (error) {
-        alert(error.message);
+        avisar(error.message);
       }
     });
   });
@@ -753,13 +919,11 @@ async function cargarRutina() {
     await migrarMarcasLocales();
   }
 
-  if (!diaRestaurado) {
-    diaRestaurado = true;
-    const guardado = localStorage.getItem(LAST_DAY_KEY);
-    if (guardado) {
-      const idx = rutina.findIndex((d) => String(d.id) === guardado);
-      if (idx >= 0) currentDayIndex = idx;
-    }
+  // Al abrir la app (y cuando empieza una semana nueva) se muestra el día
+  // que toca; después se respeta el día que elijas.
+  if (semanaDiaElegido !== semana) {
+    semanaDiaElegido = semana;
+    currentDayIndex = indiceDiaQueToca();
   }
 
   if (selectedEditorDay >= rutina.length) {
@@ -903,7 +1067,6 @@ function render() {
 function showDay(index) {
   currentDayIndex = index;
   vista = "dias";
-  guardarUltimoDia(rutina[index]);
 
   content.hidden = false;
   tabsWrap.hidden = false;
@@ -1145,12 +1308,12 @@ async function saveDaySettings() {
   const nombre = document.getElementById("dayNameInput").value.trim();
 
   if (!Number.isInteger(numero) || numero < 1) {
-    alert("El número del día debe ser un entero mayor a 0.");
+    avisar("El número del día debe ser un entero mayor a 0.");
     return;
   }
 
   if (!nombre) {
-    alert("Escribe un nombre para el día.");
+    avisar("Escribe un nombre para el día.");
     return;
   }
 
@@ -1170,7 +1333,7 @@ async function saveDaySettings() {
     render();
     renderEditor();
   } catch (error) {
-    alert(error.message);
+    avisar(error.message);
   }
 }
 
@@ -1178,11 +1341,11 @@ async function deleteCurrentDay() {
   const day = rutina[selectedEditorDay];
 
   if (rutina.length === 1) {
-    alert("Debe existir al menos un día.");
+    avisar("Debe existir al menos un día.");
     return;
   }
 
-  if (!confirm(`¿Eliminar el Día ${day.numero} y todos sus ejercicios?`)) {
+  if (!(await confirmar(`¿Eliminar el Día ${day.numero} y todos sus ejercicios?`, { textoAceptar: "Eliminar día", peligro: true }))) {
     return;
   }
 
@@ -1193,16 +1356,16 @@ async function deleteCurrentDay() {
     render();
     renderEditor();
   } catch (error) {
-    alert(error.message);
+    avisar(error.message);
   }
 }
 
 addDayButton.addEventListener("click", async () => {
   const max = Math.max(0, ...rutina.map((day) => Number(day.numero) || 0));
   const numero = max + 1;
-  const nombre = prompt("Nombre del nuevo día:", `Día ${numero}`);
+  const nombre = await pedirTexto("Nombre del nuevo día:", { titulo: "Nuevo día", valor: `Día ${numero}`, textoAceptar: "Crear día" });
 
-  if (!nombre || !nombre.trim()) return;
+  if (!nombre) return;
 
   try {
     const result = await api("createDay", {
@@ -1215,7 +1378,7 @@ addDayButton.addEventListener("click", async () => {
     render();
     renderEditor();
   } catch (error) {
-    alert(error.message);
+    avisar(error.message);
   }
 });
 
@@ -1295,7 +1458,7 @@ imagenArchivoInput.addEventListener("change", async () => {
   if (!archivo) return;
 
   if (!archivo.type.startsWith("image/")) {
-    alert("Elegí un archivo de imagen.");
+    avisar("Elegí un archivo de imagen.");
     imagenArchivoInput.value = "";
     return;
   }
@@ -1306,7 +1469,7 @@ imagenArchivoInput.addEventListener("change", async () => {
     exerciseForm.dataset.wgerId = "";
     actualizarWgerPreview();
   } catch (error) {
-    alert("No se pudo cargar la imagen: " + error.message);
+    avisar("No se pudo cargar la imagen: " + error.message);
   } finally {
     imagenArchivoInput.value = "";
   }
@@ -1466,7 +1629,7 @@ function abrirFormularioAsignacion(item) {
       await cargarRutina();
       renderEditor();
     } catch (error) {
-      alert(error.message);
+      avisar(error.message);
     }
   });
 }
@@ -1547,7 +1710,7 @@ function renderGestionCatalogo(catalogo) {
         item.usos > 0
           ? ` Se usa en ${item.usos} día${item.usos === 1 ? "" : "s"}: al eliminarlo, desaparece de esos días junto con su historial de peso.`
           : "";
-      if (!confirm(`¿Eliminar "${item.name}" del catálogo?${advertencia}`)) return;
+      if (!(await confirmar(`¿Eliminar "${item.name}" del catálogo?${advertencia}`, { textoAceptar: "Eliminar", peligro: true }))) return;
 
       try {
         await api("catalogoEliminar", { id: item.id });
@@ -1555,7 +1718,7 @@ function renderGestionCatalogo(catalogo) {
         renderEditor();
         abrirGestionCatalogo();
       } catch (error) {
-        alert(error.message);
+        avisar(error.message);
       }
     });
   });
@@ -1690,7 +1853,7 @@ exerciseForm.addEventListener("submit", async (event) => {
   const wgerId = exerciseForm.dataset.wgerId || "";
 
   if (!nombre) {
-    alert("Escribe el nombre del ejercicio.");
+    avisar("Escribe el nombre del ejercicio.");
     return;
   }
 
@@ -1738,19 +1901,19 @@ exerciseForm.addEventListener("submit", async (event) => {
     await cargarRutina();
     renderEditor();
   } catch (error) {
-    alert(error.message);
+    avisar(error.message);
   }
 });
 
 async function deleteExercise(exercise) {
-  if (!confirm(`¿Quitar "${exercise.name}" de este día? (sigue en tu catálogo y en los demás días donde lo uses)`)) return;
+  if (!(await confirmar(`¿Quitar "${exercise.name}" de este día? Sigue en tu catálogo y en los demás días donde lo uses.`, { textoAceptar: "Quitar", peligro: true }))) return;
 
   try {
     await api("deleteExercise", { id: exercise.id });
     await cargarRutina();
     renderEditor();
   } catch (error) {
-    alert(error.message);
+    avisar(error.message);
   }
 }
 
@@ -1772,7 +1935,7 @@ async function moveExercise(index, delta) {
     await cargarRutina();
     renderEditor();
   } catch (error) {
-    alert(error.message);
+    avisar(error.message);
   }
 }
 
@@ -1810,13 +1973,30 @@ function abrirMiCuenta() {
   modal.querySelector(".modal-card").classList.remove("vertical");
   modalBody.innerHTML = `
     <div class="mi-cuenta">
-      <div>
-        <div class="name">${esc(usuarioActual.nombre)}</div>
-        <div class="footer-note" style="margin:2px 0 0;text-align:left">${esc(usuarioActual.email)}</div>
+      <div class="mi-cuenta-encabezado">
+        <span class="mi-cuenta-avatar" aria-hidden="true">${icon("user")}</span>
+        <div>
+          <div class="name" id="miCuentaNombre">${esc(usuarioActual.nombre)}</div>
+          <div class="footer-note" style="margin:0;text-align:left">${esc(usuarioActual.email)}</div>
+        </div>
       </div>
 
-      <form id="cambiarPasswordForm">
-        <h3 style="margin:0 0 4px">${pideActual ? "Cambiar contraseña" : "Crear contraseña"}</h3>
+      <div class="tabs mi-cuenta-tabs" role="tablist">
+        <button type="button" class="tab active" role="tab" data-cuenta-tab="datos">Datos</button>
+        <button type="button" class="tab" role="tab" data-cuenta-tab="password">Contraseña</button>
+        ${usuarioActual.rol === "admin" ? "" : `<button type="button" class="tab" role="tab" data-cuenta-tab="compartir">Compartir rutina</button>`}
+      </div>
+
+      <form id="cambiarNombreForm" class="mi-cuenta-panel" data-cuenta-panel="datos">
+        <div class="field"><label for="miNombre">Nombre</label>
+          <input id="miNombre" value="${esc(usuarioActual.nombre)}" maxlength="60" autocomplete="name" required></div>
+        <p class="auth-error" id="cambiarNombreMensaje" hidden></p>
+        <div class="form-actions" style="margin-top:8px">
+          <button type="submit" class="main-btn" id="cambiarNombreGuardar">Guardar nombre</button>
+        </div>
+      </form>
+
+      <form id="cambiarPasswordForm" class="mi-cuenta-panel" data-cuenta-panel="password" hidden>
         ${
           pideActual
             ? ""
@@ -1831,14 +2011,39 @@ function abrirMiCuenta() {
         <div class="field"><label>Repetir contraseña nueva</label><input type="password" id="passwordRepetir" autocomplete="new-password" minlength="6" required></div>
         <p class="auth-error" id="cambiarPasswordMensaje" hidden></p>
         <div class="form-actions" style="margin-top:8px">
-          <button type="submit" class="main-btn" id="cambiarPasswordGuardar">Guardar contraseña</button>
+          <button type="submit" class="main-btn" id="cambiarPasswordGuardar">${pideActual ? "Guardar contraseña" : "Crear contraseña"}</button>
         </div>
       </form>
 
-      <button type="button" class="small danger" id="miCuentaCerrarSesion" style="width:100%">Cerrar sesión</button>
+      ${
+        usuarioActual.rol === "admin"
+          ? ""
+          : `<section id="rutinaCompartida" class="mi-cuenta-panel" data-cuenta-panel="compartir" hidden>
+              <p class="footer-note">Cargando rutina compartida…</p>
+            </section>`
+      }
+
+      <button type="button" class="small danger mi-cuenta-salir" id="miCuentaCerrarSesion">Cerrar sesión</button>
     </div>
   `;
   modal.classList.add("open");
+
+  // Pestañas: se ve una sección a la vez. La de compartir se carga la
+  // primera vez que se abre (genera el código si todavía no existe).
+  let compartirCargado = false;
+  modalBody.querySelectorAll("[data-cuenta-tab]").forEach((boton) => {
+    boton.addEventListener("click", () => {
+      const tab = boton.dataset.cuentaTab;
+      modalBody.querySelectorAll("[data-cuenta-tab]").forEach((b) => b.classList.toggle("active", b === boton));
+      modalBody.querySelectorAll("[data-cuenta-panel]").forEach((panel) => {
+        panel.hidden = panel.dataset.cuentaPanel !== tab;
+      });
+      if (tab === "compartir" && !compartirCargado) {
+        compartirCargado = true;
+        cargarRutinaCompartida();
+      }
+    });
+  });
 
   const form = document.getElementById("cambiarPasswordForm");
   const mensaje = document.getElementById("cambiarPasswordMensaje");
@@ -1875,9 +2080,128 @@ function abrirMiCuenta() {
     }
   });
 
+  const nombreForm = document.getElementById("cambiarNombreForm");
+  const nombreMensaje = document.getElementById("cambiarNombreMensaje");
+  const nombreGuardar = document.getElementById("cambiarNombreGuardar");
+
+  nombreForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    nombreMensaje.hidden = true;
+    nombreMensaje.classList.remove("ok");
+    nombreGuardar.disabled = true;
+    try {
+      const result = await api("actualizarPerfil", { nombre: document.getElementById("miNombre").value });
+      usuarioActual.nombre = result.usuario.nombre;
+      document.getElementById("miNombre").value = usuarioActual.nombre;
+      document.getElementById("miCuentaNombre").textContent = usuarioActual.nombre;
+      actualizarPersonaButton();
+      nombreMensaje.textContent = "Listo, tu nombre se actualizó.";
+      nombreMensaje.classList.add("ok");
+      nombreMensaje.hidden = false;
+      // Los pesos muestran el nombre de la cuenta: se recarga para verlo.
+      if (usuarioActual.rol !== "admin") cargarRutina().catch(() => {});
+    } catch (error) {
+      nombreMensaje.textContent = error.message;
+      nombreMensaje.hidden = false;
+    } finally {
+      nombreGuardar.disabled = false;
+    }
+  });
+
   document.getElementById("miCuentaCerrarSesion").addEventListener("click", () => {
     closeVideo();
     cerrarSesion();
+  });
+}
+
+// --- Rutina compartida: código para invitar y unirse con un código ---
+
+async function cargarRutinaCompartida(accion = "rutinaCompartida") {
+  const seccion = document.getElementById("rutinaCompartida");
+  if (!seccion) return;
+
+  let datos;
+  try {
+    datos = await api(accion);
+  } catch (error) {
+    seccion.innerHTML = `<p class="auth-error">${esc(error.message)}</p>`;
+    return;
+  }
+
+  const otros = datos.miembros.filter((m) => m.id !== usuarioActual.id).map((m) => m.nombre);
+
+  seccion.innerHTML = `
+    <h4 class="mi-cuenta-subtitulo">Tu código</h4>
+    <p class="footer-note" style="margin:0;text-align:left">
+      Pasale este código a quien quiera entrenar con tu misma rutina. Cada persona tiene sus propios pesos y marcas,
+      pero si alguien edita la rutina, el cambio lo ven todos.
+    </p>
+    <div class="codigo-rutina">
+      <strong id="codigoRutinaTexto">${esc(datos.codigo)}</strong>
+      <button type="button" class="small" id="copiarCodigoRutina">Copiar</button>
+    </div>
+    <p class="footer-note" style="margin:0 0 8px;text-align:left">
+      ${otros.length ? `La usan también: ${esc(otros.join(", "))}.` : "Por ahora solo la usás vos."}
+    </p>
+    <button type="button" class="small" id="regenerarCodigoRutina">Generar código nuevo</button>
+
+    <form id="unirseRutinaForm" style="margin-top:14px">
+      <h4 class="mi-cuenta-subtitulo">Unirme a otra rutina</h4>
+      <div class="field"><label for="codigoUnirse">Código</label>
+        <input id="codigoUnirse" autocomplete="off" autocapitalize="characters" placeholder="Ej.: K7P2QX" required></div>
+      <p class="auth-error" id="unirseRutinaMensaje" hidden></p>
+      <div class="form-actions" style="margin-top:8px">
+        <button type="submit" class="main-btn" id="unirseRutinaBoton">Unirme</button>
+      </div>
+    </form>
+  `;
+
+  document.getElementById("copiarCodigoRutina").addEventListener("click", async (event) => {
+    try {
+      await navigator.clipboard.writeText(datos.codigo);
+      event.target.textContent = "¡Copiado!";
+    } catch {
+      avisar(`El código es ${datos.codigo}.`);
+    }
+  });
+
+  document.getElementById("regenerarCodigoRutina").addEventListener("click", async () => {
+    const ok = await confirmar(
+      "Se genera un código nuevo y el actual deja de servir. Quienes ya usan tu rutina la siguen usando.",
+      { titulo: "Generar código nuevo", textoAceptar: "Generar" }
+    );
+    if (ok) cargarRutinaCompartida("regenerarCodigoRutina");
+  });
+
+  const form = document.getElementById("unirseRutinaForm");
+  const mensaje = document.getElementById("unirseRutinaMensaje");
+  const boton = document.getElementById("unirseRutinaBoton");
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const codigo = document.getElementById("codigoUnirse").value.trim();
+    mensaje.hidden = true;
+    if (!codigo) return;
+
+    const ok = await confirmar(
+      "Vas a dejar de ver tu rutina actual y pasar a usar la del código. Tu rutina actual y los pesos " +
+        "que registraste en ella no se borran: el admin te la puede volver a asignar.",
+      { titulo: "¿Unirte a esa rutina?", textoAceptar: "Unirme" }
+    );
+    if (!ok) return;
+
+    boton.disabled = true;
+    try {
+      await api("unirseARutina", { codigo });
+      closeVideo();
+      semanaDiaElegido = null;
+      await cargarRutina();
+      avisar("Listo, ya estás usando la rutina compartida.");
+    } catch (error) {
+      mensaje.textContent = error.message;
+      mensaje.hidden = false;
+      boton.disabled = false;
+    }
   });
 }
 progresoButton.addEventListener("click", mostrarInfo);
@@ -1914,7 +2238,8 @@ modal.addEventListener("click", (event) => {
   if (event.target === modal) closeVideo();
 });
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") closeVideo();
+  // Si hay un diálogo encima, Escape cierra solo el diálogo.
+  if (event.key === "Escape" && !cerrarDialogoActual) closeVideo();
 });
 
 // --- PWA: registro de service worker e instalación en el teléfono ---
@@ -1939,7 +2264,7 @@ if ("serviceWorker" in navigator) {
   if (isIOS) {
     installButton.hidden = false;
     installButton.addEventListener("click", () => {
-      alert(
+      avisar(
         "Para instalar MecFit en tu iPhone:\n\n" +
         "1. Tocá el botón Compartir (el cuadrito con la flecha ↑).\n" +
         "2. Elegí 'Agregar a pantalla de inicio'.\n" +

@@ -115,12 +115,14 @@
                         <button type="button" class="tab active" data-admin-tab="rutina">Rutina</button>
                         <button type="button" class="tab" data-admin-tab="pesos">Pesos</button>
                         <button type="button" class="tab" data-admin-tab="metricas">Métricas</button>
+                        <button type="button" class="tab" data-admin-tab="actividad">Actividad</button>
                     </div>
                 </div>
 
                 <div id="adminTabRutina" class="admin-tab-panel"></div>
                 <div id="adminTabPesos" class="admin-tab-panel" hidden></div>
                 <div id="adminTabMetricas" class="admin-tab-panel" hidden></div>
+                <div id="adminTabActividad" class="admin-tab-panel" hidden></div>
             </section>
         </main>
     </div>
@@ -208,6 +210,7 @@
             </form>
         </div>
     </div>
+    <div class="dialogo" id="dialogo" role="dialog" aria-modal="true" hidden></div>
     <script src="js/app.js"></script>
     <script src="js/importar-pdf.js"></script>
     <script src="js/admin.js"></script>
