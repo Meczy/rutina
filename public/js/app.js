@@ -85,6 +85,36 @@ function icon(nombre, clase = "") {
   return `<svg class="icon ${clase}" aria-hidden="true"><use href="/icons/sprite.svg?v=${SPRITE_VERSION}#${nombre}"></use></svg>`;
 }
 
+// --- Paletas de color (Mi cuenta → Apariencia). Se guardan en la cuenta y
+// también en el dispositivo, para aplicarlas al abrir antes de que cargue
+// la sesión (ver el script del <head> en index.html). ---
+
+const TEMAS = {
+  rosa: { nombre: "Rosa", barra: "#2b0d24", muestra: ["#7a1252", "#d6336c", "#ffe0eb", "#fff5f8"] },
+  indigo: { nombre: "Índigo noche", barra: "#0b1020", muestra: ["#1e1b4b", "#4f46e5", "#e8e7fd", "#f4f6fb"] },
+  petroleo: { nombre: "Verde petróleo", barra: "#05161a", muestra: ["#0b4a47", "#0f8b7d", "#d7f0eb", "#f1f6f5"] },
+  grafito: { nombre: "Grafito y naranja", barra: "#0c0a09", muestra: ["#292524", "#ea580c", "#ffedd5", "#f5f5f4"] },
+};
+const TEMA_POR_DEFECTO = "rosa";
+const TEMA_KEY = "mecfit-tema";
+
+function temaActual() {
+  const tema = document.documentElement.dataset.tema;
+  return TEMAS[tema] ? tema : TEMA_POR_DEFECTO;
+}
+
+function aplicarTema(tema) {
+  if (!TEMAS[tema]) tema = TEMA_POR_DEFECTO;
+  document.documentElement.dataset.tema = tema;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = TEMAS[tema].barra;
+  try {
+    localStorage.setItem(TEMA_KEY, tema);
+  } catch {
+    /* sin almacenamiento local: igual queda aplicada en esta sesión */
+  }
+}
+
 // --- Diálogos propios (en vez de alert/confirm/prompt del navegador, que en
 // el celular se ven mal o directamente no aparecen en la app instalada).
 // Van en su propia capa (#dialogo), por encima del modal y del editor. ---
@@ -791,7 +821,7 @@ function construirGraficoSVG(historialCompleto) {
 
   const linea = puntos.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
   const circulos = puntos
-    .map((p) => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.5" fill="#d6336c"></circle>`)
+    .map((p) => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.5" style="fill:var(--accent)"></circle>`)
     .join("");
 
   const yMax = padTop;
@@ -808,17 +838,17 @@ function construirGraficoSVG(historialCompleto) {
     .map((i) => {
       const p = puntos[i];
       const anchor = i === 0 ? "start" : i === datos.length - 1 ? "end" : "middle";
-      return `<text x="${p.x.toFixed(1)}" y="${height - 8}" font-size="10.5" fill="#8b8290" text-anchor="${anchor}">${esc(formatFecha(p.d.fecha))}</text>`;
+      return `<text x="${p.x.toFixed(1)}" y="${height - 8}" font-size="10.5" style="fill:var(--muted)" text-anchor="${anchor}">${esc(formatFecha(p.d.fecha))}</text>`;
     })
     .join("");
 
   return `
     <svg viewBox="0 0 ${width} ${height}" class="progreso-chart" preserveAspectRatio="xMidYMid meet">
-      <line x1="${padLeft}" y1="${yMax}" x2="${width - padRight}" y2="${yMax}" stroke="#f0e2e8" stroke-width="1" stroke-dasharray="4 4"></line>
-      <line x1="${padLeft}" y1="${yMin}" x2="${width - padRight}" y2="${yMin}" stroke="#f0e2e8" stroke-width="1" stroke-dasharray="4 4"></line>
-      <text x="${padLeft - 6}" y="${yMax + 4}" font-size="10.5" fill="#8b8290" text-anchor="end">${formatPeso(max)}</text>
-      <text x="${padLeft - 6}" y="${yMin + 4}" font-size="10.5" fill="#8b8290" text-anchor="end">${formatPeso(min)}</text>
-      <polyline points="${linea}" fill="none" stroke="#d6336c" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></polyline>
+      <line x1="${padLeft}" y1="${yMax}" x2="${width - padRight}" y2="${yMax}" style="stroke:var(--line)" stroke-width="1" stroke-dasharray="4 4"></line>
+      <line x1="${padLeft}" y1="${yMin}" x2="${width - padRight}" y2="${yMin}" style="stroke:var(--line)" stroke-width="1" stroke-dasharray="4 4"></line>
+      <text x="${padLeft - 6}" y="${yMax + 4}" font-size="10.5" style="fill:var(--muted)" text-anchor="end">${formatPeso(max)}</text>
+      <text x="${padLeft - 6}" y="${yMin + 4}" font-size="10.5" style="fill:var(--muted)" text-anchor="end">${formatPeso(min)}</text>
+      <polyline points="${linea}" fill="none" style="stroke:var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></polyline>
       ${circulos}
       ${etiquetasFecha}
     </svg>
@@ -980,6 +1010,7 @@ async function cargarRutina() {
   }
 
   usuarioActual = result.usuario || usuarioActual;
+  if (usuarioActual && usuarioActual.tema) aplicarTema(usuarioActual.tema);
   rutina = result.rutina;
   misRutinas = result.rutinas || [];
   marcasSemana = new Set(result.marcas || []);
@@ -2082,6 +2113,7 @@ function abrirMiCuenta(tabInicial = "datos") {
       <div class="tabs mi-cuenta-tabs" role="tablist">
         <button type="button" class="tab active" role="tab" data-cuenta-tab="datos">Datos</button>
         <button type="button" class="tab" role="tab" data-cuenta-tab="password">Contraseña</button>
+        <button type="button" class="tab" role="tab" data-cuenta-tab="apariencia">Apariencia</button>
         ${usuarioActual.rol === "admin" ? "" : `<button type="button" class="tab" role="tab" data-cuenta-tab="rutinas">Rutinas</button>`}
       </div>
 
@@ -2113,6 +2145,25 @@ function abrirMiCuenta(tabInicial = "datos") {
         </div>
       </form>
 
+      <div class="mi-cuenta-panel" data-cuenta-panel="apariencia" hidden>
+        <p class="footer-note" style="margin:0 0 10px;text-align:left">
+          Elegí los colores de la app. Se guardan en tu cuenta, así los ves igual en todos tus dispositivos.
+        </p>
+        <div class="temas" role="group" aria-label="Paleta de colores">
+          ${Object.entries(TEMAS)
+            .map(
+              ([clave, t]) => `
+                <button type="button" class="tema-opcion" data-tema="${clave}" aria-pressed="${clave === temaActual()}">
+                  <span class="tema-muestra" aria-hidden="true">${t.muestra.map((c) => `<span style="background:${c}"></span>`).join("")}</span>
+                  <strong>${esc(t.nombre)}</strong>
+                </button>
+              `
+            )
+            .join("")}
+        </div>
+        <p class="auth-error" id="temaMensaje" hidden></p>
+      </div>
+
       ${
         usuarioActual.rol === "admin"
           ? ""
@@ -2143,6 +2194,24 @@ function abrirMiCuenta(tabInicial = "datos") {
     boton.addEventListener("click", () => mostrarTab(boton.dataset.cuentaTab));
   });
   if (modalBody.querySelector(`[data-cuenta-tab="${tabInicial}"]`)) mostrarTab(tabInicial);
+
+  // Apariencia: se aplica al instante y se guarda en la cuenta.
+  modalBody.querySelectorAll(".tema-opcion").forEach((boton) => {
+    boton.addEventListener("click", async () => {
+      const tema = boton.dataset.tema;
+      const mensajeTema = document.getElementById("temaMensaje");
+      aplicarTema(tema);
+      modalBody.querySelectorAll(".tema-opcion").forEach((b) => b.setAttribute("aria-pressed", String(b === boton)));
+      mensajeTema.hidden = true;
+      try {
+        await api("guardarTema", { tema });
+        usuarioActual.tema = tema;
+      } catch (error) {
+        mensajeTema.textContent = `Se aplicó en este dispositivo, pero no se pudo guardar en tu cuenta: ${error.message}`;
+        mensajeTema.hidden = false;
+      }
+    });
+  });
 
   const form = document.getElementById("cambiarPasswordForm");
   const mensaje = document.getElementById("cambiarPasswordMensaje");

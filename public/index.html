@@ -4,7 +4,19 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-    <meta name="theme-color" content="#0b1020">
+    <meta name="theme-color" content="#2b0d24">
+    <script>
+        // Aplica la paleta guardada antes de pintar, para que no aparezca otra un instante.
+        // Los colores de la barra del celular están repetidos en TEMAS (js/app.js).
+        try {
+            var tema = localStorage.getItem("mecfit-tema");
+            var barra = { rosa: "#2b0d24", indigo: "#0b1020", petroleo: "#05161a", grafito: "#0c0a09" }[tema];
+            if (barra) {
+                document.documentElement.dataset.tema = tema;
+                document.querySelector('meta[name="theme-color"]').content = barra;
+            }
+        } catch (e) {}
+    </script>
     <title>MecFit{{ENV_LABEL}}</title>
     <link rel="preload" href="icons/sprite.svg?v=2" as="image" type="image/svg+xml">
     <link rel="manifest" href="manifest.json">
