@@ -260,7 +260,7 @@ function abrirImportarPdf(opciones = {}) {
       if (!dias.length) {
         throw new Error("No se encontraron días con ejercicios en este PDF.");
       }
-      renderVistaPreviaPdf(resultado, dias, opciones);
+      renderVistaPreviaPdf(resultado, dias, { ...opciones, nombreArchivo: archivo.name });
     } catch (error) {
       resultado.innerHTML = `<p class="auth-error">${esc(error.message)}</p>`;
     }
@@ -268,6 +268,10 @@ function abrirImportarPdf(opciones = {}) {
 }
 
 function renderVistaPreviaPdf(contenedor, dias, opciones) {
+  // Nombre sugerido para la rutina nueva: el del archivo, sin ".pdf".
+  const nombreSugerido =
+    String(opciones.nombreArchivo || "").replace(/\.pdf$/i, "").replace(/[_-]+/g, " ").trim().slice(0, 60) ||
+    "Rutina importada";
   const totalEjercicios = dias.reduce((total, d) => total + d.ejercicios.length, 0);
   const sinVideo = dias.reduce(
     (total, d) => total + d.ejercicios.filter((e) => !e.video_url).length,
@@ -308,12 +312,16 @@ function renderVistaPreviaPdf(contenedor, dias, opciones) {
       )
       .join("")}
     <div class="field">
-      <label><input type="radio" name="importarModo" value="reemplazar" checked style="width:auto">
+      <label><input type="radio" name="importarModo" value="nueva" checked style="width:auto">
+        Crear como rutina nueva (la actual queda en tu lista)</label>
+      <input type="text" id="importarNombreRutina" maxlength="60" value="${esc(nombreSugerido)}"
+        placeholder="Nombre de la rutina" style="margin:2px 0 10px">
+      <label><input type="radio" name="importarModo" value="reemplazar" style="width:auto">
         Reemplazar la rutina actual por esta</label>
       <label><input type="radio" name="importarModo" value="agregar" style="width:auto">
         Agregar estos días a la rutina actual</label>
       <p class="footer-note" style="margin:6px 0 0;text-align:left">
-        El historial de pesos se conserva: si un ejercicio ya existía con el mismo nombre, se reutiliza.
+        El historial de pesos se conserva: los pesos se unen por nombre de ejercicio, en cualquier rutina.
       </p>
     </div>
     <p class="auth-error" id="importarPdfError" hidden></p>
@@ -327,6 +335,10 @@ function renderVistaPreviaPdf(contenedor, dias, opciones) {
 
   const guardar = document.getElementById("importarPdfGuardar");
   const errorEl = document.getElementById("importarPdfError");
+  const nombreInput = document.getElementById("importarNombreRutina");
+  nombreInput.addEventListener("focus", () => {
+    contenedor.querySelector('input[name="importarModo"][value="nueva"]').checked = true;
+  });
 
   guardar.addEventListener("click", async () => {
     const modo = contenedor.querySelector('input[name="importarModo"]:checked').value;
@@ -335,6 +347,7 @@ function renderVistaPreviaPdf(contenedor, dias, opciones) {
 
     try {
       const datos = { modo, dias };
+      if (modo === "nueva") datos.nombre_rutina = nombreInput.value.trim() || nombreSugerido;
       if (opciones.targetUsuarioId) datos.target_usuario_id = opciones.targetUsuarioId;
       const result = await api("importarRutina", datos);
       closeVideo();
