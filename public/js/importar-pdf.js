@@ -249,6 +249,8 @@ async function extraerRutinaDeDocumento(doc) {
       nombre,
       series: textoDeColumna(fila, columnas, "series"),
       repeticiones: textoDeColumna(fila, columnas, "reps"),
+      descanso: textoDeColumna(fila, columnas, "descanso"),
+      observaciones: textoDeColumna(fila, columnas, "observaciones"),
       video_url: enlace ? enlace.url : "",
     });
   }
@@ -345,7 +347,9 @@ function renderVistaPreviaPdf(contenedor, dias, opciones) {
                     <div class="history-row" style="padding:8px 0">
                       <div class="history-info">
                         <span class="history-fecha">${esc(e.nombre)}</span>
-                        <span class="history-peso">${esc(e.series || "—")} × ${esc(e.repeticiones || "—")}</span>
+                        <span class="history-peso">${esc(e.series || "—")} × ${esc(e.repeticiones || "—")}${
+                          e.descanso ? ` · ${esc(e.descanso)}` : ""
+                        }${e.observaciones ? ` · ${esc(e.observaciones)}` : ""}</span>
                       </div>
                       ${
                         e.video_url

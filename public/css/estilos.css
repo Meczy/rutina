@@ -111,7 +111,9 @@
 svg[hidden]{display:none}
 .wger-preview .small{margin-left:auto}
 #exerciseForm.modo-catalogo .field:has(#exerciseSeries),
-#exerciseForm.modo-catalogo .field:has(#exerciseReps){display:none}
+#exerciseForm.modo-catalogo .field:has(#exerciseReps),
+#exerciseForm.modo-catalogo .field:has(#exerciseDescanso),
+#exerciseForm.modo-catalogo .field:has(#exerciseObservaciones){display:none}
 
 .wger-buscador{padding:16px;background:#fff}
 .wger-filtros{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
@@ -407,3 +409,14 @@ html[data-tema="grafito"]{--bg:#f5f5f4;--ink:#1c1917;--muted:#6b6460;--line:#e7e
 .icono-relleno{fill:currentColor}
 .wger-placeholder{width:22px;height:22px}
 .day-switcher-arrow .icon{width:20px;height:20px}
+
+/* Notas del entrenador en cada ejercicio: plegadas hasta tocar "Notas". */
+.notas-ejercicio{margin-top:8px}
+.notas-ejercicio summary{display:inline-flex;align-items:center;gap:4px;cursor:pointer;list-style:none;font-size:12.5px;font-weight:800;color:var(--accent2);padding:3px 8px 3px 6px;border-radius:999px;background:var(--chip-fondo);border:1px solid var(--chip-borde)}
+.notas-ejercicio summary::-webkit-details-marker{display:none}
+.notas-ejercicio summary .icon{transition:transform .2s var(--ease)}
+.notas-ejercicio[open] summary .icon{transform:rotate(180deg)}
+.notas-ejercicio summary:focus-visible{outline:2px solid var(--accent-foco);outline-offset:2px}
+.notas-ejercicio-cuerpo{margin-top:6px;padding:8px 10px;border-left:3px solid var(--chip-borde);background:var(--tinte);border-radius:0 10px 10px 0;font-size:13.5px;line-height:1.4}
+.notas-ejercicio-cuerpo p{margin:0}
+.notas-ejercicio-cuerpo p + p{margin-top:4px}
