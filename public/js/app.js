@@ -1713,11 +1713,8 @@ function renderEditor() {
           <input type="checkbox" id="dayComplementarioInput" ${day.complementario ? "checked" : ""}>
           <b>Complementario</b>
         </label>
-        <button type="button" class="info-btn" aria-label="Qué es un día complementario" aria-expanded="false" aria-controls="complementarioInfo">${icon("info")}</button>
+        <button type="button" class="info-btn" aria-label="Qué es un día complementario">${icon("info")}</button>
       </div>
-      <p class="dia-complementario-info" id="complementarioInfo" hidden>
-        Para días como Abdomen que no son un entrenamiento aparte: no cuentan en "Días" ni en "Hechos".
-      </p>
       <div class="editor-dia-acciones">
         <button type="button" class="main-btn save-day-name">${icon("save")} Guardar</button>
         <button type="button" class="small danger delete-day-button">${icon("trash-2")} Eliminar día</button>
@@ -1725,11 +1722,12 @@ function renderEditor() {
     </div>
   `;
 
-  const infoBoton = heading.querySelector(".info-btn");
-  const infoTexto = heading.querySelector("#complementarioInfo");
-  infoBoton.addEventListener("click", () => {
-    infoTexto.hidden = !infoTexto.hidden;
-    infoBoton.setAttribute("aria-expanded", String(!infoTexto.hidden));
+  heading.querySelector(".info-btn").addEventListener("click", () => {
+    avisar(
+      "Es una sesión de apoyo, como abdomen o movilidad, que se hace junto con otro entrenamiento. " +
+        'Podés marcar sus ejercicios y registrar pesos como siempre, pero no cuenta en "Días" ni en "Esta semana".',
+      { titulo: "Día complementario" }
+    );
   });
 
   heading.querySelector(".save-day-name").addEventListener("click", saveDaySettings);
