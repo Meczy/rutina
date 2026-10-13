@@ -1716,7 +1716,7 @@ function renderEditor() {
         <button type="button" class="info-btn" aria-label="Qué es un día complementario" aria-expanded="false" aria-controls="complementarioInfo">${icon("info")}</button>
       </div>
       <p class="dia-complementario-info" id="complementarioInfo" hidden>
-        Para días como Abdomen que no son un entrenamiento aparte: no cuentan en "Días" ni en "Días completados".
+        Para días como Abdomen que no son un entrenamiento aparte: no cuentan en "Días" ni en "Hechos".
       </p>
       <div class="editor-dia-acciones">
         <button type="button" class="main-btn save-day-name">${icon("save")} Guardar</button>
