@@ -4,7 +4,7 @@ const ICONOS = [
   "dumbbell", "user", "chart-column", "pencil", "download",
   "x", "plus", "minus", "save", "trash-2", "search",
   "chevron-up", "chevron-down", "chevron-left", "chevron-right",
-  "arrow-left", "menu", "upload", "image", "play", "calendar-days", "check"
+  "arrow-left", "menu", "upload", "image", "play", "calendar-days", "check", "info"
 ];
 
 const symbols = ICONOS.map((nombre) => {

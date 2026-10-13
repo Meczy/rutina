@@ -67,7 +67,7 @@ function esc(value) {
 
 // Subir SPRITE_VERSION cada vez que se agreguen íconos a sprite.svg: así el
 // navegador baja el archivo nuevo en vez de usar la copia guardada.
-const SPRITE_VERSION = "4";
+const SPRITE_VERSION = "5";
 
 function icon(nombre, clase = "") {
   return `<svg class="icon ${clase}" aria-hidden="true"><use href="/icons/sprite.svg?v=${SPRITE_VERSION}#${nombre}"></use></svg>`;
@@ -1395,7 +1395,7 @@ function render() {
     currentDayIndex = Math.max(0, rutina.length - 1);
   }
 
-  totalDaysEl.textContent = rutina.length;
+  totalDaysEl.textContent = diasDeEntrenamiento().length; // sin los complementarios
   totalExercisesEl.textContent = rutina.reduce(
     (total, day) => total + day.ejercicios.length,
     0
@@ -1699,42 +1699,37 @@ function renderEditor() {
   const heading = document.createElement("div");
   heading.className = "editor-day-title";
   heading.innerHTML = `
-    <div class="editor-day-fields">
+    <div class="editor-dia-form">
       <div class="day-number-edit">
-        <label>Día</label>
+        <label for="dayNumberInput">Día</label>
         <input id="dayNumberInput" type="number" min="1" step="1" value="${Number(day.numero) || 1}">
       </div>
       <div class="day-name-edit">
-        <label>Nombre</label>
+        <label for="dayNameInput">Nombre</label>
         <input id="dayNameInput" value="${esc(day.titulo)}">
       </div>
-      <div class="day-actions">
-        <button class="small icon-only save-day-name" title="Guardar día" aria-label="Guardar día">${icon("save")}<span class="btn-label"></span></button>
-        <button class="small icon-only danger delete-day-button" title="Eliminar día" aria-label="Eliminar día">${icon("trash-2")}<span class="btn-label"></span></button>
+      <div class="dia-complementario">
+        <label>
+          <input type="checkbox" id="dayComplementarioInput" ${day.complementario ? "checked" : ""}>
+          <b>Complementario</b>
+        </label>
+        <button type="button" class="info-btn" aria-label="Qué es un día complementario" aria-expanded="false" aria-controls="complementarioInfo">${icon("info")}</button>
+      </div>
+      <p class="dia-complementario-info" id="complementarioInfo" hidden>
+        Para días como Abdomen que no son un entrenamiento aparte: no cuentan en "Días" ni en "Días completados".
+      </p>
+      <div class="editor-dia-acciones">
+        <button type="button" class="main-btn save-day-name">${icon("save")} Guardar</button>
+        <button type="button" class="small danger delete-day-button">${icon("trash-2")} Eliminar día</button>
       </div>
     </div>
-    <label class="dia-complementario">
-      <input type="checkbox" id="dayComplementarioInput" ${day.complementario ? "checked" : ""}>
-      <span><b>Complementario</b> (por ejemplo, Abdomen): no cuenta como día de entrenamiento ni en "Días completados", el calendario o la racha.</span>
-    </label>
   `;
 
-  // Se guarda al tocarla, con el número y nombre que el día ya tiene.
-  heading.querySelector("#dayComplementarioInput").addEventListener("change", async (event) => {
-    try {
-      const result = await api("updateDay", {
-        id: day.id,
-        numero: Number(day.numero),
-        nombre: day.titulo,
-        complementario: event.target.checked,
-      });
-      rutina = result.rutina;
-      render();
-      renderEditor();
-    } catch (error) {
-      event.target.checked = !event.target.checked;
-      avisar(error.message);
-    }
+  const infoBoton = heading.querySelector(".info-btn");
+  const infoTexto = heading.querySelector("#complementarioInfo");
+  infoBoton.addEventListener("click", () => {
+    infoTexto.hidden = !infoTexto.hidden;
+    infoBoton.setAttribute("aria-expanded", String(!infoTexto.hidden));
   });
 
   heading.querySelector(".save-day-name").addEventListener("click", saveDaySettings);
@@ -1800,7 +1795,8 @@ async function saveDaySettings() {
     const result = await api("updateDay", {
       id: day.id,
       numero,
-      nombre
+      nombre,
+      complementario: document.getElementById("dayComplementarioInput").checked
     });
 
     rutina = result.rutina;
