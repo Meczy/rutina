@@ -67,7 +67,7 @@ function esc(value) {
 
 // Subir SPRITE_VERSION cada vez que se agreguen íconos a sprite.svg: así el
 // navegador baja el archivo nuevo en vez de usar la copia guardada.
-const SPRITE_VERSION = "5";
+const SPRITE_VERSION = "6";
 
 function icon(nombre, clase = "") {
   return `<svg class="icon ${clase}" aria-hidden="true"><use href="/icons/sprite.svg?v=${SPRITE_VERSION}#${nombre}"></use></svg>`;
