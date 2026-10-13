@@ -84,7 +84,7 @@ const TEMAS = {
   grafito: { nombre: "Grafito y naranja", barra: "#0c0a09", muestra: ["#292524", "#ea580c", "#ffedd5", "#f5f5f4"] },
   lavanda: { nombre: "Lavanda", barra: "#1e1033", muestra: ["#4c1d95", "#8b5cf6", "#ede4fe", "#f7f4fd"] },
   coral: { nombre: "Coral", barra: "#2d0f0c", muestra: ["#8f2d24", "#dc4f3c", "#ffe3dc", "#fff6f3"] },
-  malva: { nombre: "Malva", barra: "#241318", muestra: ["#6b3346", "#b4637a", "#f5e1e7", "#fbf5f6"] },
+  malva: { nombre: "Malva", barra: "#4a2233", muestra: ["#8e4a63", "#b4637a", "#f5e1e7", "#fbf5f6"] },
   carbon: { nombre: "Carbón y rojo", barra: "#09090b", muestra: ["#27272a", "#dc2626", "#fee2e2", "#f4f4f5"] },
 };
 const TEMA_POR_DEFECTO = "rosa";
@@ -714,6 +714,8 @@ const SEMANAS_CALENDARIO = 12;
 let calendarioMes = null; // { anio, mes } que se está viendo
 let calendarioFechaElegida = null;
 let calendarioDatos = null;
+let calendarioSemanasAbiertas = false; // "Ver más" en Entrenamientos por semana
+const SEMANAS_VISIBLES = 3;
 
 function fechaLocal(valor) {
   const d = new Date(valor);
@@ -755,6 +757,7 @@ async function mostrarCalendario() {
   const hoy = new Date();
   calendarioMes = { anio: hoy.getFullYear(), mes: hoy.getMonth() };
   calendarioFechaElegida = fechaLocal(hoy);
+  calendarioSemanasAbiertas = false;
   infoSection.innerHTML = `<p class="footer-note">Cargando tu historial…</p>`;
 
   try {
@@ -868,8 +871,9 @@ function renderCalendario() {
 
     <div class="metrica-card">
       <div class="metrica-card-head"><strong>Entrenamientos por semana</strong></div>
-      <div class="cal-semanas">
+      <div class="cal-semanas" id="calSemanas">
         ${semanas
+          .slice(0, calendarioSemanasAbiertas ? semanas.length : SEMANAS_VISIBLES)
           .map((s, i) => {
             const pct = Math.round((s.dias / maxDias) * 100);
             const [, sm, sd] = s.semana.split("-").map(Number);
@@ -882,9 +886,17 @@ function renderCalendario() {
           })
           .join("")}
       </div>
+      <button type="button" class="small cal-ver-mas" aria-expanded="${calendarioSemanasAbiertas}" aria-controls="calSemanas">
+        ${calendarioSemanasAbiertas ? `${icon("chevron-up")} Ver menos` : `${icon("chevron-down")} Ver más`}
+      </button>
       <p class="footer-note" style="margin:10px 0 0;text-align:left">Un día cuenta como completado cuando marcás todos sus ejercicios.</p>
     </div>
   `;
+
+  infoSection.querySelector(".cal-ver-mas").addEventListener("click", () => {
+    calendarioSemanasAbiertas = !calendarioSemanasAbiertas;
+    renderCalendario();
+  });
 
   infoSection.querySelectorAll(".cal-nav").forEach((boton) => {
     boton.addEventListener("click", () => {
