@@ -5,6 +5,7 @@
   },
   "devDependencies": {
     "lucide-static": "^1.47.0",
-    "pdfjs-dist": "^3.11.174"
+    "pdfjs-dist": "^3.11.174",
+    "qrcode-generator": "^1.4.4"
   }
 }

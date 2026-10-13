@@ -1020,6 +1020,29 @@ export default async (request) => {
       return respuesta({ error: "Falta indicar sobre qué usuario operar." }, 400);
     }
 
+    if (action === "verInvitacion") {
+      // Para preguntar antes de unirse: qué rutina es y quiénes la usan.
+      const codigo = String(body.codigo ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      const filas = codigo ? await db.sql`SELECT id, nombre FROM rutinas WHERE codigo = ${codigo}` : [];
+      if (!filas.length) return respuesta({ error: "Esa invitación ya no es válida: el código no existe o se cambió." }, 404);
+
+      const rutinaInvitada = Number(filas[0].id);
+      const miembros = await db.sql`
+        SELECT u.id, u.nombre FROM rutina_usuarios ru JOIN usuarios u ON u.id = ru.usuario_id
+        WHERE ru.rutina_id = ${rutinaInvitada} ORDER BY u.nombre
+      `;
+      const activaId = await rutinaIdDeUsuario(usuarioObjetivo.id);
+      return respuesta({
+        ok: true,
+        codigo,
+        rutinaId: rutinaInvitada,
+        nombre: filas[0].nombre,
+        compartidaCon: miembros.filter((m) => Number(m.id) !== usuarioObjetivo.id).map((m) => m.nombre),
+        laTenes: miembros.some((m) => Number(m.id) === usuarioObjetivo.id),
+        esLaActiva: activaId === rutinaInvitada,
+      });
+    }
+
     if (action === "unirseARutina") {
       // El código se escribe a mano: se ignoran mayúsculas, espacios y guiones.
       const codigo = String(body.codigo ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -1162,7 +1185,15 @@ export default async (request) => {
     }
 
     if (action === "rutinaCompartida" || action === "regenerarCodigoRutina") {
-      const datos = await datosRutinaCompartida(rutinaId, action === "regenerarCodigoRutina");
+      // Por defecto la rutina activa; con rutina_id, cualquiera de tu lista.
+      let compartirId = rutinaId;
+      if (body.rutina_id !== undefined) {
+        compartirId = Number(body.rutina_id);
+        if (!Number.isInteger(compartirId) || !(await usuarioTieneRutina(usuarioObjetivo.id, compartirId))) {
+          return respuesta({ error: "Esa rutina no está en tu lista." }, 404);
+        }
+      }
+      const datos = await datosRutinaCompartida(compartirId, action === "regenerarCodigoRutina");
       return respuesta({ ok: true, ...datos });
     }
 

@@ -296,7 +296,6 @@ button{
 .mi-cuenta-tabs .tab{padding:9px 14px;font-size:14px}
 .mi-cuenta-panel{border:1px solid var(--line);border-radius:var(--radius-md);padding:14px}
 .mi-cuenta-subtitulo{margin:0 0 4px;font-size:15px}
-#unirseRutinaForm{border-top:1px solid var(--line);padding-top:14px}
 .mi-cuenta-salir{width:100%}
 .codigo-rutina{display:flex;align-items:center;gap:10px;margin:10px 0 6px}
 .codigo-rutina strong{font-size:26px;letter-spacing:.18em;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--soft);padding:6px 12px;border-radius:12px}
@@ -360,13 +359,9 @@ button{
 
 /* ---------- Mis rutinas (Mi cuenta) ---------- */
 .mis-rutinas{display:flex;flex-direction:column;gap:8px;margin:8px 0 12px}
-.mis-rutinas-item{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--line);border-radius:12px}
-.mis-rutinas-item.activa{border-color:var(--accent);background:var(--chip-fondo)}
-.mis-rutinas-item .meta{margin-top:2px;font-size:13px;color:var(--muted)}
 .mis-rutinas-acciones{display:flex;gap:6px;flex-wrap:wrap}
 .mis-rutinas-acciones .small{padding:7px 10px;font-size:13px}
 .etiqueta-activa{display:inline-block;margin-left:6px;padding:2px 8px;font-size:11px;font-weight:800;border-radius:999px;background:var(--accent);color:#fff;vertical-align:middle}
-#panelRutinas section + section{border-top:1px solid var(--line);padding-top:14px;margin-top:14px}
 
 /* Recuadros del encabezado: siempre los tres en la misma línea. */
 .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));max-width:520px}
@@ -420,3 +415,31 @@ html[data-tema="grafito"]{--bg:#f5f5f4;--ink:#1c1917;--muted:#6b6460;--line:#e7e
 .notas-ejercicio-cuerpo{margin-top:6px;padding:8px 10px;border-left:3px solid var(--chip-borde);background:var(--tinte);border-radius:0 10px 10px 0;font-size:13.5px;line-height:1.4}
 .notas-ejercicio-cuerpo p{margin:0}
 .notas-ejercicio-cuerpo p + p{margin-top:4px}
+
+/* Compartir rutina con QR (Mi cuenta → Rutinas). El QR siempre negro
+   sobre blanco para que las cámaras lo lean bien. */
+.compartir-qr{display:grid;grid-template-columns:150px minmax(0,1fr);gap:14px;align-items:center;margin:12px 0 10px}
+.qr-rutina{width:150px;aspect-ratio:1;max-width:100%;background:#fff;border:1px solid var(--line);border-radius:12px;padding:6px;display:grid;place-items:center;text-align:center}
+.qr-rutina svg{display:block;width:100%;height:auto}
+.compartir-qr-datos{display:flex;flex-direction:column;gap:6px;min-width:0}
+.compartir-qr-datos .codigo-rutina{margin:0}
+.compartir-botones{display:flex;gap:6px;flex-wrap:wrap}
+@media(max-width:380px){.compartir-qr{grid-template-columns:1fr;justify-items:center}.compartir-qr-datos{align-items:center}}
+
+/* Mis rutinas como lista plegable (se abre una a la vez). */
+.rutina-item{border:1px solid var(--line);border-radius:12px;background:var(--card)}
+.rutina-item.activa{border-color:var(--accent)}
+.rutina-item summary{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 12px;cursor:pointer;list-style:none}
+.rutina-item summary::-webkit-details-marker{display:none}
+.rutina-item summary:focus-visible{outline:2px solid var(--accent-foco);outline-offset:2px;border-radius:12px}
+.rutina-item-titulo{display:flex;flex-direction:column;gap:2px;min-width:0}
+.rutina-item-titulo strong{overflow-wrap:anywhere}
+.rutina-item-meta{font-size:13px;color:var(--muted)}
+.rutina-item-flecha{width:18px;height:18px;color:var(--muted);transition:transform .2s var(--ease)}
+.rutina-item[open] .rutina-item-flecha{transform:rotate(180deg)}
+.rutina-item[open] summary{border-bottom:1px solid var(--line)}
+.rutina-item-cuerpo{padding:12px;display:flex;flex-direction:column;gap:12px}
+.rutina-item-compartir{border-top:1px dashed var(--line);padding-top:12px}
+.mis-rutinas-pie{display:flex;gap:8px;flex-wrap:wrap}
+.enlace-sutil{background:none;border:0;padding:0;font:inherit;font-size:13px;font-weight:700;color:var(--muted);text-decoration:underline;cursor:pointer}
+.enlace-sutil:hover{color:var(--accent2)}

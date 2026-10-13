@@ -2334,87 +2334,157 @@ function abrirMiCuenta(tabInicial = "datos") {
   });
 }
 
-// --- Mis rutinas: elegir la activa, crear, renombrar, salir, compartir la
-// activa con un código y unirse a otra con un código. ---
+// --- Invitar con QR o enlace: mecfit.app/?unirse=CODIGO. Al abrirlo, la app
+// pregunta si agregar esa rutina (si no hay sesión, después de iniciarla). ---
+
+const INVITACION_KEY = "mecfit-invitacion";
+let invitacionPendiente = null;
+
+function enlaceInvitacion(codigo) {
+  return `${location.origin}/?unirse=${encodeURIComponent(codigo)}`;
+}
+
+// Se lee al cargar la página y se saca de la barra de direcciones, para que
+// no se vuelva a procesar al recargar.
+(function leerInvitacionDeLaUrl() {
+  const params = new URLSearchParams(location.search);
+  const codigo = params.get("unirse");
+  try {
+    if (codigo) sessionStorage.setItem(INVITACION_KEY, codigo);
+    invitacionPendiente = sessionStorage.getItem(INVITACION_KEY);
+  } catch {
+    invitacionPendiente = codigo;
+  }
+  if (codigo) history.replaceState(null, "", location.pathname);
+})();
+
+function olvidarInvitacion() {
+  invitacionPendiente = null;
+  try {
+    sessionStorage.removeItem(INVITACION_KEY);
+  } catch {
+    /* nada que limpiar */
+  }
+}
+
+async function procesarInvitacionPendiente() {
+  const codigo = invitacionPendiente;
+  if (!codigo || !usuarioActual || usuarioActual.rol === "admin") return;
+  olvidarInvitacion();
+
+  try {
+    const inv = await api("verInvitacion", { codigo });
+    if (inv.esLaActiva) {
+      avisar(`Ya estás entrenando con "${inv.nombre}".`);
+      return;
+    }
+
+    const con = inv.compartidaCon.length ? ` (la usan ${inv.compartidaCon.join(", ")})` : "";
+    const ok = await confirmar(
+      inv.laTenes
+        ? `"${inv.nombre}" ya está en tus rutinas. ¿Querés entrenar con ella ahora?`
+        : `Te invitaron a la rutina "${inv.nombre}"${con}. Se agrega a tus rutinas y queda como la activa; tus otras rutinas siguen ahí.`,
+      { titulo: "Rutina compartida", textoAceptar: inv.laTenes ? "Usarla" : "Agregar rutina" }
+    );
+    if (!ok) return;
+
+    await api(inv.laTenes ? "activarRutina" : "unirseARutina", inv.laTenes ? { rutina_id: inv.rutinaId } : { codigo });
+    semanaDiaElegido = null;
+    await cargarRutina();
+    avisar(`Listo, ahora entrenás con "${inv.nombre}".`);
+  } catch (error) {
+    avisar(error.message);
+  }
+}
+
+// La librería del QR se carga solo cuando hace falta (como pdf.js).
+let qrCargando = null;
+
+function cargarQr() {
+  if (window.qrcode) return Promise.resolve(window.qrcode);
+  if (!qrCargando) {
+    qrCargando = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "/vendor/qrcode/qrcode.js";
+      script.onload = () => resolve(window.qrcode);
+      script.onerror = () => {
+        qrCargando = null;
+        reject(new Error("No se pudo cargar el QR."));
+      };
+      document.head.appendChild(script);
+    });
+  }
+  return qrCargando;
+}
+
+async function dibujarQr(contenedor, texto) {
+  if (!contenedor) return;
+  try {
+    const qrcode = await cargarQr();
+    const qr = qrcode(0, "M");
+    qr.addData(texto);
+    qr.make();
+    contenedor.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+  } catch (error) {
+    contenedor.innerHTML = `<span class="footer-note">${esc(error.message)} Usá el código.</span>`;
+  }
+}
+
+// --- Mis rutinas (Mi cuenta → Rutinas): lista plegable. Cada rutina muestra
+// solo su resumen; al tocarla se despliegan sus acciones y su QR para
+// compartir (se abre una a la vez). Abajo: crear una nueva o agregar una con
+// un código. ---
 
 async function cargarPanelRutinas() {
   const panel = document.getElementById("panelRutinas");
   if (!panel) return;
 
-  let compartida;
   try {
-    [misRutinas, compartida] = await Promise.all([
-      api("misRutinas").then((r) => r.rutinas),
-      api("rutinaCompartida"),
-    ]);
+    misRutinas = (await api("misRutinas")).rutinas;
   } catch (error) {
     panel.innerHTML = `<p class="auth-error">${esc(error.message)}</p>`;
     return;
   }
   renderSelectorRutina();
 
-  const activa = misRutinas.find((r) => r.activa) || misRutinas[0];
-  const otros = compartida.miembros.filter((m) => m.id !== usuarioActual.id).map((m) => m.nombre);
-
   panel.innerHTML = `
-    <section>
-      <h4 class="mi-cuenta-subtitulo">Mis rutinas</h4>
-      <p class="footer-note" style="margin:0;text-align:left">
-        Entrenás con la rutina activa hasta que elijas otra. Tus pesos se comparten entre rutinas
-        cuando el ejercicio se llama igual.
-      </p>
-      <div class="mis-rutinas">
-        ${misRutinas
-          .map(
-            (r) => `
-              <div class="mis-rutinas-item${r.activa ? " activa" : ""}" data-rutina-id="${r.id}">
-                <div>
+    <p class="footer-note" style="margin:0 0 10px;text-align:left">
+      Entrenás con la rutina activa hasta que elijas otra. Tocá una rutina para ver sus opciones y compartirla.
+    </p>
+    <div class="mis-rutinas">
+      ${misRutinas
+        .map(
+          (r) => `
+            <details class="rutina-item${r.activa ? " activa" : ""}" name="mis-rutinas" data-rutina-id="${r.id}">
+              <summary>
+                <span class="rutina-item-titulo">
                   <strong>${esc(r.nombre)}</strong>${r.activa ? '<span class="etiqueta-activa">activa</span>' : ""}
-                  <div class="meta">${r.dias} día${r.dias === 1 ? "" : "s"}${
+                  <span class="rutina-item-meta">${r.dias} día${r.dias === 1 ? "" : "s"}${
                     r.compartidaCon.length ? ` · con ${esc(r.compartidaCon.join(", "))}` : ""
-                  }</div>
-                </div>
+                  }</span>
+                </span>
+                ${icon("chevron-down", "rutina-item-flecha")}
+              </summary>
+              <div class="rutina-item-cuerpo">
                 <div class="mis-rutinas-acciones">
-                  ${r.activa ? "" : `<button type="button" class="small" data-accion="usar">Usar</button>`}
-                  <button type="button" class="small" data-accion="renombrar">Renombrar</button>
+                  ${r.activa ? "" : `<button type="button" class="main-btn" data-accion="usar">Activar</button>`}
+                  <button type="button" class="small" data-accion="renombrar">${icon("pencil")} Renombrar</button>
                   ${misRutinas.length > 1 ? `<button type="button" class="small danger" data-accion="salir">Salir</button>` : ""}
                 </div>
+                <div class="rutina-item-compartir" data-compartir>
+                  <span class="footer-note">Cargando QR…</span>
+                </div>
               </div>
-            `
-          )
-          .join("")}
-      </div>
-      <button type="button" class="small" id="nuevaRutinaButton">${icon("plus")} Nueva rutina vacía</button>
-      <p class="footer-note" style="margin:6px 0 0;text-align:left">Para crear una desde un PDF, usá "Importar PDF" en Editar rutina.</p>
-    </section>
-
-    <section>
-      <h4 class="mi-cuenta-subtitulo">Compartir "${esc(activa ? activa.nombre : "")}"</h4>
-      <p class="footer-note" style="margin:0;text-align:left">
-        Pasale este código a quien quiera entrenar con esta rutina. Cada persona tiene sus propios pesos y marcas,
-        pero si alguien edita la rutina, el cambio lo ven todos.
-      </p>
-      <div class="codigo-rutina">
-        <strong>${esc(compartida.codigo)}</strong>
-        <button type="button" class="small" id="copiarCodigoRutina">Copiar</button>
-      </div>
-      <p class="footer-note" style="margin:0 0 8px;text-align:left">
-        ${otros.length ? `La usan también: ${esc(otros.join(", "))}.` : "Por ahora solo la usás vos."}
-      </p>
-      <button type="button" class="small" id="regenerarCodigoRutina">Generar código nuevo</button>
-    </section>
-
-    <section>
-      <form id="unirseRutinaForm">
-        <h4 class="mi-cuenta-subtitulo">Agregar una rutina con un código</h4>
-        <div class="field"><label for="codigoUnirse">Código</label>
-          <input id="codigoUnirse" autocomplete="off" autocapitalize="characters" placeholder="Ej.: K7P2QX" required></div>
-        <p class="auth-error" id="unirseRutinaMensaje" hidden></p>
-        <div class="form-actions" style="margin-top:8px">
-          <button type="submit" class="main-btn" id="unirseRutinaBoton">Agregar</button>
-        </div>
-      </form>
-    </section>
+            </details>
+          `
+        )
+        .join("")}
+    </div>
+    <div class="mis-rutinas-pie">
+      <button type="button" class="small" id="nuevaRutinaButton">${icon("plus")} Nueva rutina</button>
+      <button type="button" class="small" id="agregarConCodigoButton">Agregar con código</button>
+    </div>
+    <p class="footer-note" style="margin:8px 0 0;text-align:left">Para crear una desde un PDF, usá "Importar PDF" en Editar rutina.</p>
   `;
 
   // Después de cualquier cambio: recargar la app y volver a pintar el panel.
@@ -2427,9 +2497,17 @@ async function cargarPanelRutinas() {
     await cargarPanelRutinas();
   };
 
-  panel.querySelectorAll(".mis-rutinas-item").forEach((item) => {
+  panel.querySelectorAll(".rutina-item").forEach((item) => {
     const r = misRutinas.find((x) => String(x.id) === item.dataset.rutinaId);
     if (!r) return;
+
+    // El QR se genera recién la primera vez que se abre la rutina.
+    item.addEventListener("toggle", () => {
+      if (item.open && !item.dataset.qrCargado) {
+        item.dataset.qrCargado = "1";
+        pintarCompartirRutina(item.querySelector("[data-compartir]"), r);
+      }
+    });
 
     item.querySelector('[data-accion="usar"]')?.addEventListener("click", async () => {
       try {
@@ -2487,49 +2565,85 @@ async function cargarPanelRutinas() {
     }
   });
 
-  document.getElementById("copiarCodigoRutina").addEventListener("click", async (event) => {
-    try {
-      await navigator.clipboard.writeText(compartida.codigo);
-      event.target.textContent = "¡Copiado!";
-    } catch {
-      avisar(`El código es ${compartida.codigo}.`);
-    }
-  });
-
-  document.getElementById("regenerarCodigoRutina").addEventListener("click", async () => {
-    const ok = await confirmar(
-      "Se genera un código nuevo y el actual deja de servir. Quienes ya usan esta rutina la siguen usando.",
-      { titulo: "Generar código nuevo", textoAceptar: "Generar" }
-    );
-    if (!ok) return;
-    try {
-      await api("regenerarCodigoRutina");
-      await cargarPanelRutinas();
-    } catch (error) {
-      avisar(error.message);
-    }
-  });
-
-  const form = document.getElementById("unirseRutinaForm");
-  const mensaje = document.getElementById("unirseRutinaMensaje");
-  const boton = document.getElementById("unirseRutinaBoton");
-
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const codigo = document.getElementById("codigoUnirse").value.trim();
-    mensaje.hidden = true;
+  document.getElementById("agregarConCodigoButton").addEventListener("click", async () => {
+    const codigo = await pedirTexto("Escribí el código de 6 letras que te pasaron:", {
+      titulo: "Agregar rutina con código",
+      textoAceptar: "Agregar",
+    });
     if (!codigo) return;
-
-    boton.disabled = true;
     try {
       await api("unirseARutina", { codigo });
       await refrescar({ cambioActiva: true });
       avisar("Listo, la rutina se agregó a tu lista y quedó como activa. Tus otras rutinas siguen ahí.");
     } catch (error) {
-      mensaje.textContent = error.message;
-      mensaje.hidden = false;
-      boton.disabled = false;
+      avisar(error.message);
     }
+  });
+}
+
+// Bloque "Compartir" de una rutina: QR, código y botones para enviar o
+// copiar el enlace. accion = "regenerarCodigoRutina" para cambiar el código.
+async function pintarCompartirRutina(contenedor, r, accion = "rutinaCompartida") {
+  let compartida;
+  try {
+    compartida = await api(accion, { rutina_id: r.id });
+  } catch (error) {
+    contenedor.innerHTML = `<p class="auth-error">${esc(error.message)}</p>`;
+    return;
+  }
+
+  const enlace = enlaceInvitacion(compartida.codigo);
+  contenedor.innerHTML = `
+    <h4 class="mi-cuenta-subtitulo">Compartir</h4>
+    <p class="footer-note" style="margin:0;text-align:left">
+      Quien escanee el QR con la cámara del celular la agrega a sus rutinas. Cada persona tiene sus propios pesos y marcas,
+      pero si alguien edita la rutina, el cambio lo ven todos.
+    </p>
+    <div class="compartir-qr">
+      <div class="qr-rutina" role="img" aria-label="Código QR para agregar la rutina ${esc(r.nombre)}">
+        <span class="footer-note">Generando QR…</span>
+      </div>
+      <div class="compartir-qr-datos">
+        <span class="footer-note" style="margin:0;text-align:left">O con el código</span>
+        <div class="codigo-rutina"><strong>${esc(compartida.codigo)}</strong></div>
+        <div class="compartir-botones">
+          ${
+            navigator.share
+              ? `<button type="button" class="small" data-enviar>${icon("upload")} Enviar enlace</button>`
+              : ""
+          }
+          <button type="button" class="small" data-copiar>Copiar enlace</button>
+        </div>
+      </div>
+    </div>
+    <button type="button" class="enlace-sutil" data-regenerar>Generar código nuevo</button>
+  `;
+
+  dibujarQr(contenedor.querySelector(".qr-rutina"), enlace);
+
+  contenedor.querySelector("[data-copiar]").addEventListener("click", async (event) => {
+    try {
+      await navigator.clipboard.writeText(enlace);
+      event.target.textContent = "¡Copiado!";
+    } catch {
+      avisar(`El enlace es ${enlace}`);
+    }
+  });
+
+  contenedor.querySelector("[data-enviar]")?.addEventListener("click", async () => {
+    try {
+      await navigator.share({ title: "MecFit", text: `Entrená conmigo en MecFit con la rutina "${r.nombre}":`, url: enlace });
+    } catch {
+      /* se canceló el menú de compartir */
+    }
+  });
+
+  contenedor.querySelector("[data-regenerar]").addEventListener("click", async () => {
+    const ok = await confirmar(
+      "Se genera un código y un QR nuevos, y los anteriores dejan de servir. Quienes ya usan esta rutina la siguen usando.",
+      { titulo: "Generar código nuevo", textoAceptar: "Generar" }
+    );
+    if (ok) pintarCompartirRutina(contenedor, r, "regenerarCodigoRutina");
   });
 }
 
@@ -2644,6 +2758,7 @@ let googleListo = false;
 function mostrarPantallaApp() {
   authScreen.hidden = true;
   appRoot.hidden = false;
+  procesarInvitacionPendiente();
 }
 
 function mostrarPantallaLogin() {
