@@ -825,9 +825,9 @@
                 (h) => `
               <div class="admin-tabla-fila">
                 <span>${fmtFecha(h.fecha)}</span>
-                <span>${h.peso} kg</span>
-                <span>${h.grasa === null ? "—" : h.grasa + "% grasa"}</span>
-                <span>${h.agua === null ? "—" : h.agua + "% agua"}</span>
+                ${METRICAS.filter((m) => h[m.clave] !== null && h[m.clave] !== undefined)
+                  .map((m) => `<span>${m.clave === "peso" ? "" : `${m.nombre}: `}${conUnidad(h[m.clave], m.unidad)}</span>`)
+                  .join("")}
               </div>`
               )
               .join("")}
