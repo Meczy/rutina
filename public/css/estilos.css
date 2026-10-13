@@ -541,3 +541,16 @@ button.topnav-brand:focus-visible{outline:2px solid var(--accent-foco);outline-o
 .editor-dia-acciones .main-btn,.editor-dia-acciones .small{display:inline-flex;align-items:center;gap:6px}
 @media(max-width:520px){.editor-dia-acciones > *{flex:1;justify-content:center}}
 .cal-ver-mas{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:12px}
+
+/* Importar PDF: formato de ejemplo y selector de archivo con estilo propio. */
+.importar-pdf{padding:16px;display:flex;flex-direction:column;gap:12px}
+.importar-formato{padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--tinte);display:flex;flex-direction:column;gap:8px}
+.importar-formato-botones{display:flex;gap:8px;flex-wrap:wrap}
+.importar-formato-botones a{display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--ink);background:var(--card);border:1px solid var(--line)}
+.importar-formato-botones a:hover{border-color:var(--chip-borde)}
+.selector-archivo{position:relative;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px;border:2px dashed var(--chip-borde);border-radius:14px;background:var(--chip-fondo);cursor:pointer;transition:border-color .15s var(--ease),background .15s var(--ease)}
+.selector-archivo:hover{border-color:var(--accent)}
+.selector-archivo:focus-within{outline:2px solid var(--accent-foco);outline-offset:2px}
+.selector-archivo input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.selector-archivo-boton{display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#fff;font-weight:800;padding:10px 16px;border-radius:12px;box-shadow:0 6px 16px var(--accent-sombra)}
+.selector-archivo-nombre{color:var(--muted);font-size:14px;min-width:0;overflow-wrap:anywhere}

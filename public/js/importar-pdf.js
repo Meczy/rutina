@@ -286,14 +286,27 @@ function abrirImportarPdf(opciones = {}) {
   modalTitle.textContent = "Importar rutina desde PDF";
   modal.querySelector(".modal-card").classList.remove("vertical");
   modalBody.innerHTML = `
-    <div style="padding:16px">
-      <p class="footer-note" style="margin:0 0 12px;text-align:left">
-        Elegí el PDF de tu rutina. Solo se aceptan rutinas con el formato del entrenador
-        (bloques "Día N" con la tabla Ejercicio, Video, Series, Reps, Descanso y Observaciones).
-        Antes de guardar vas a ver los días y ejercicios que se encontraron.
-      </p>
-      <input type="file" id="importarPdfInput" accept="application/pdf,.pdf">
-      <div id="importarPdfResultado" style="margin-top:14px"></div>
+    <div class="importar-pdf">
+      <section class="importar-formato">
+        <h4 class="mi-cuenta-subtitulo">Formato de la rutina</h4>
+        <p class="footer-note" style="margin:0;text-align:left">
+          Solo se aceptan PDF con este formato: bloques "Día N" con la tabla Ejercicio, Video, Series, Reps,
+          Descanso y Observaciones. Podés ver el ejemplo o descargar la plantilla de Excel, completarla y guardarla como PDF.
+        </p>
+        <div class="importar-formato-botones">
+          <a class="small" href="/ejemplos/mecfit-formato-rutina.pdf" target="_blank" rel="noopener">${icon("file-text")} Ver PDF de ejemplo</a>
+          <a class="small" href="/ejemplos/mecfit-plantilla-rutina.xlsx" download="MecFit - plantilla de rutina.xlsx">${icon("download")} Descargar plantilla (Excel)</a>
+        </div>
+      </section>
+
+      <label class="selector-archivo" for="importarPdfInput">
+        <input type="file" id="importarPdfInput" accept="application/pdf,.pdf">
+        <span class="selector-archivo-boton">${icon("upload")} Elegir PDF</span>
+        <span class="selector-archivo-nombre" id="importarPdfNombre">Ningún archivo elegido</span>
+      </label>
+      <p class="footer-note" style="margin:0;text-align:left">Antes de guardar vas a ver los días y ejercicios que se encontraron.</p>
+
+      <div id="importarPdfResultado"></div>
     </div>
   `;
   modal.classList.add("open");
@@ -304,6 +317,7 @@ function abrirImportarPdf(opciones = {}) {
   input.addEventListener("change", async () => {
     const archivo = input.files && input.files[0];
     if (!archivo) return;
+    document.getElementById("importarPdfNombre").textContent = archivo.name;
 
     resultado.innerHTML = `<p class="footer-note">Leyendo el PDF…</p>`;
 
