@@ -501,3 +501,22 @@ html[data-tema="grafito"]{--bg:#f5f5f4;--ink:#1c1917;--muted:#6b6460;--line:#e7e
 .metrica-chip{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:7px 12px;font:inherit;font-size:13px;font-weight:800;cursor:pointer;transition:background .15s var(--ease),border-color .15s var(--ease)}
 .metrica-chip:hover{border-color:var(--chip-borde)}
 .metrica-chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* Editar rutina como página (antes era una ventana encima). */
+.editor-pagina{display:none}
+.editor-pagina.open{display:block;animation:fadeIn .25s var(--ease)}
+.editor-pagina .editor-panel{max-width:none;width:auto;min-height:0;margin:0;border-radius:var(--radius-md);border:1px solid var(--line);background:var(--card);padding:16px}
+
+/* El encabezado con los datos de la rutina solo se ve en la rutina. */
+.hero[hidden]{display:none}
+
+/* Logo de la barra superior: botón que lleva a la rutina. */
+button.topnav-brand{background:none;border:0;padding:0;font:inherit;font-weight:800;cursor:pointer}
+button.topnav-brand:focus-visible{outline:2px solid var(--accent-foco);outline-offset:4px;border-radius:8px}
+
+/* Días complementarios (por ejemplo, Abdomen): pestaña con borde punteado. */
+.tab.complementario{border-style:dashed}
+.tab.complementario:not(.active){color:var(--muted)}
+.dia-complementario{display:flex;gap:8px;align-items:flex-start;margin-top:12px;font-size:13.5px;line-height:1.4;color:var(--muted);cursor:pointer}
+.dia-complementario input{margin-top:2px;width:16px;height:16px;accent-color:var(--accent);flex:none}
+.dia-complementario b{color:var(--ink)}

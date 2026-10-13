@@ -229,7 +229,9 @@ async function extraerRutinaDeDocumento(doc) {
         (normalizarTextoPdf(primeraCelda) !== "ejercicio" ? primeraCelda : "") ||
         `Día ${dias.length + 1}`;
 
-      diaActual = { titulo, ejercicios: [] };
+      // Un bloque sin título "Día N" (como el de abdomen) es complementario:
+      // no cuenta como día de entrenamiento.
+      diaActual = { titulo, ejercicios: [], complementario: !tituloPendiente };
       dias.push(diaActual);
       tituloPendiente = null;
       continue;
@@ -339,7 +341,9 @@ function renderVistaPreviaPdf(contenedor, dias, opciones) {
       .map(
         (dia, i) => `
           <div style="margin-bottom:12px">
-            <div class="name" style="font-size:15px">Día ${i + 1} — ${esc(dia.titulo)}</div>
+            <div class="name" style="font-size:15px">${
+              dia.complementario ? `${esc(dia.titulo)} <span class="etiqueta-activa">complementario</span>` : `Día ${i + 1} — ${esc(dia.titulo)}`
+            }</div>
             <div class="history-list" style="padding:0 4px">
               ${dia.ejercicios
                 .map(

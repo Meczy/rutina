@@ -62,7 +62,7 @@
     <div class="app" id="appRoot" hidden>
         <nav class="topnav" id="topnav">
             <div class="topnav-inner">
-                <div class="topnav-brand"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=4#dumbbell"></use></svg> MecFit{{ENV_LABEL}}</div>
+                <button type="button" class="topnav-brand" id="logoButton" aria-label="Ir a mi rutina"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=4#dumbbell"></use></svg> MecFit{{ENV_LABEL}}</button>
                 <button type="button" class="hamburger" id="navToggle" aria-label="Abrir menú" aria-expanded="false" aria-controls="navLinks">
                     <svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=4#menu"></use></svg>
                 </button>
@@ -75,7 +75,7 @@
                 </div>
             </div>
         </nav>
-        <header class="hero">
+        <header class="hero" id="heroApp">
             <div
                 style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;position:relative;z-index:1">
                 <div>
@@ -102,6 +102,22 @@
         </div>
         <main id="content"></main>
         <section class="info-section" id="infoSection"></section>
+        <section class="editor-pagina" id="editor">
+            <div class="day-head">
+                <h2><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=4#pencil"></use></svg> Editar rutina</h2>
+            </div>
+            <div class="editor-panel">
+                <div class="toolbar">
+                    <button class="main-btn" id="addDay"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=4#plus"></use></svg> Nuevo día</button>
+                    <button class="small" id="importarPdfButton"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=4#upload"></use></svg> Importar PDF</button>
+                    <button class="small" id="verCatalogoButton"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=4#dumbbell"></use></svg> Catálogo de ejercicios</button>
+                    <button class="small" id="exportData"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=4#save"></use></svg> Exportar respaldo</button>
+                </div>
+                <p class="footer-note" style="margin:0 0 12px;text-align:left">Elegí un día, cambiá su número y nombre, y usá las flechas para cambiar el orden de los ejercicios.</p>
+                <div class="editor-tabs" id="editorTabs"></div>
+                <div id="editorList"></div>
+            </div>
+        </section>
         <div class="footer-note">Tu rutina, tus pesos y tus marcas se guardan en tu cuenta. Las marcas de "hecho" se reinician cada lunes.</div>
     </div>
     <div class="app" id="panelAdmin" hidden>
@@ -160,23 +176,6 @@
                 <div class="modal-title" id="modalTitle">Video</div><button class="close" id="close" aria-label="Cerrar"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=4#x"></use></svg></button>
             </div>
             <div id="modalBody"></div>
-        </div>
-    </div>
-    <div class="editor" id="editor">
-        <div class="editor-panel">
-            <div class="editor-head">
-                <h2>Editar rutina</h2><button class="small" id="closeEditor"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=4#x"></use></svg> Cerrar</button>
-            </div>
-            <div class="toolbar">
-                <button class="main-btn" id="addDay"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=4#plus"></use></svg> Nuevo día</button>
-                <button class="small" id="importarPdfButton"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=4#upload"></use></svg> Importar PDF</button>
-                <button class="small" id="verCatalogoButton"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=4#dumbbell"></use></svg> Catálogo de ejercicios</button>
-                <button class="small" id="exportData"><svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=4#save"></use></svg> Exportar respaldo</button>
-            </div>
-            <p style="color:#667085">Selecciona un día, cambia su número y nombre, y arrastra los ejercicios para
-                cambiar el orden.</p>
-            <div class="editor-tabs" id="editorTabs"></div>
-            <div id="editorList"></div>
         </div>
     </div>
     <div class="form-overlay" id="exerciseForm">
