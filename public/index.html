@@ -119,7 +119,14 @@
 
         <main id="adminContent">
             <section class="admin-card" id="adminUsuariosSection">
-                <div class="name">Usuarios</div>
+                <div class="admin-usuarios-head">
+                    <div class="name">Usuarios</div>
+                    <span class="meta" id="adminUsuariosConteo"></span>
+                </div>
+                <div class="admin-buscador">
+                    <svg class="icon" aria-hidden="true"><use href="icons/sprite.svg?v=3#search"></use></svg>
+                    <input type="search" id="adminBuscarUsuario" placeholder="Buscar por nombre o correo" autocomplete="off" aria-label="Buscar usuario">
+                </div>
                 <div id="adminListaUsuarios" class="admin-lista-usuarios"></div>
             </section>
 

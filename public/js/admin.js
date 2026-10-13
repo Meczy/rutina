@@ -4,6 +4,8 @@
 (function () {
   const panelAdmin = document.getElementById("panelAdmin");
   const listaUsuariosEl = document.getElementById("adminListaUsuarios");
+  const buscarUsuarioInput = document.getElementById("adminBuscarUsuario");
+  const conteoUsuariosEl = document.getElementById("adminUsuariosConteo");
   const seccionUsuarios = document.getElementById("adminUsuariosSection");
   const seccionDetalle = document.getElementById("adminDetalleSection");
   const nombreUsuarioEl = document.getElementById("adminUsuarioNombre");
@@ -54,13 +56,39 @@
     }
   }
 
+  // Buscador: filtra por nombre o correo, sin importar mayúsculas ni tildes.
+  function normalizarBusqueda(texto) {
+    return String(texto || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+  }
+
+  buscarUsuarioInput.addEventListener("input", renderUsuarios);
+
   function renderUsuarios() {
     if (!usuarios.length) {
+      conteoUsuariosEl.textContent = "";
       listaUsuariosEl.innerHTML = `<div class="meta">No hay usuarios todavía.</div>`;
       return;
     }
 
-    listaUsuariosEl.innerHTML = usuarios
+    const busqueda = normalizarBusqueda(buscarUsuarioInput.value);
+    const visibles = busqueda
+      ? usuarios.filter((u) => normalizarBusqueda(`${u.nombre} ${u.email}`).includes(busqueda))
+      : usuarios;
+
+    conteoUsuariosEl.textContent = busqueda
+      ? `${visibles.length} de ${usuarios.length}`
+      : `${usuarios.length} usuario${usuarios.length === 1 ? "" : "s"}`;
+
+    if (!visibles.length) {
+      listaUsuariosEl.innerHTML = `<div class="meta">Ningún usuario coincide con "${esc(buscarUsuarioInput.value.trim())}".</div>`;
+      return;
+    }
+
+    listaUsuariosEl.innerHTML = visibles
       .map((u) => {
         const rutinasTxt = u.rutinas.length
           ? u.rutinas.map((r) => `${esc(r.nombre)}${r.activa && u.rutinas.length > 1 ? " (activa)" : ""}`).join(", ")

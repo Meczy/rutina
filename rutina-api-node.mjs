@@ -205,6 +205,10 @@ async function crearRutinaPropia(usuarioId) {
 // y con el CHECK de la columna usuarios.tema).
 const TEMAS_VALIDOS = ["rosa", "indigo", "petroleo", "grafito"];
 
+// Paleta con la que arrancan las cuentas nuevas (las existentes sin paleta
+// elegida siguen con la rosa, que es la de por defecto en el CSS).
+const TEMA_CUENTAS_NUEVAS = "indigo";
+
 function datosPublicosUsuario(usuario) {
   const datos = {
     id: usuario.id,
@@ -870,8 +874,8 @@ export default async (request) => {
         `;
       } else {
         const rows = await db.sql`
-          INSERT INTO usuarios (email, nombre, password_hash)
-          VALUES (${email}, ${nombre}, ${hashPassword(password)})
+          INSERT INTO usuarios (email, nombre, password_hash, tema)
+          VALUES (${email}, ${nombre}, ${hashPassword(password)}, ${TEMA_CUENTAS_NUEVAS})
           RETURNING id
         `;
         usuarioId = Number(rows[0].id);
@@ -927,8 +931,8 @@ export default async (request) => {
           await db.sql`UPDATE usuarios SET google_id = ${datosGoogle.googleId} WHERE id = ${filas[0].id}`;
         } else {
           const rows = await db.sql`
-            INSERT INTO usuarios (email, nombre, google_id)
-            VALUES (${datosGoogle.email}, ${datosGoogle.nombre}, ${datosGoogle.googleId})
+            INSERT INTO usuarios (email, nombre, google_id, tema)
+            VALUES (${datosGoogle.email}, ${datosGoogle.nombre}, ${datosGoogle.googleId}, ${TEMA_CUENTAS_NUEVAS})
             RETURNING id, email, nombre
           `;
           filas = rows;
