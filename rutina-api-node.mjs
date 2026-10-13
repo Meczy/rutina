@@ -495,7 +495,7 @@ async function manejarAccionAdmin(action, body, usuarioActual) {
     if (!Number.isInteger(targetId)) return respuesta({ error: "Usuario inválido." }, 400);
 
     const historial = await db.sql`
-      SELECT id, fecha, peso, grasa, agua
+      SELECT id, fecha, peso, grasa, agua, cintura, cadera, pecho, brazo, muslo
       FROM metricas_corporales
       WHERE usuario_id = ${targetId}
       ORDER BY fecha DESC, created_at DESC
@@ -506,9 +506,7 @@ async function manejarAccionAdmin(action, body, usuarioActual) {
       historial: historial.map((h) => ({
         id: Number(h.id),
         fecha: h.fecha,
-        peso: Number(h.peso),
-        grasa: h.grasa === null ? null : Number(h.grasa),
-        agua: h.agua === null ? null : Number(h.agua),
+        ...metricaDesdeFila(h),
       })),
     });
   }
@@ -708,6 +706,26 @@ async function marcasDeSemana(usuarioId, semana) {
 function notaDelBody(body, campo, maximo) {
   if (!(campo in body)) return null;
   return String(body[campo] ?? "").replace(/\s+/g, " ").trim().slice(0, maximo);
+}
+
+// ---------- Métricas corporales (Mi progreso) ----------
+
+// Datos que se pueden registrar por día. Todos opcionales (al menos uno).
+const CAMPOS_METRICA = [
+  { clave: "peso", min: 0, max: 999, error: "El peso debe ser un número mayor a 0." },
+  { clave: "grasa", min: 0, max: 100, ceroValido: true, error: "El % de grasa debe estar entre 0 y 100." },
+  { clave: "agua", min: 0, max: 100, ceroValido: true, error: "El % de agua debe estar entre 0 y 100." },
+  { clave: "cintura", min: 0, max: 400, error: "La cintura debe estar entre 0 y 400 cm." },
+  { clave: "cadera", min: 0, max: 400, error: "La cadera debe estar entre 0 y 400 cm." },
+  { clave: "pecho", min: 0, max: 400, error: "El pecho debe estar entre 0 y 400 cm." },
+  { clave: "brazo", min: 0, max: 200, error: "El brazo debe estar entre 0 y 200 cm." },
+  { clave: "muslo", min: 0, max: 200, error: "El muslo debe estar entre 0 y 200 cm." },
+];
+
+function metricaDesdeFila(h) {
+  const datos = {};
+  for (const { clave } of CAMPOS_METRICA) datos[clave] = h[clave] === null ? null : Number(h[clave]);
+  return datos;
 }
 
 // ---------- Rutina ----------
@@ -1749,52 +1767,48 @@ export default async (request) => {
     }
 
     if (action === "logMetrica") {
-      const peso = Number(body.peso);
-      const grasa =
-        body.grasa === "" || body.grasa === undefined || body.grasa === null
-          ? null
-          : Number(body.grasa);
-      const agua =
-        body.agua === "" || body.agua === undefined || body.agua === null
-          ? null
-          : Number(body.agua);
-      const fecha = String(body.fecha ?? "").trim();
+      // Todos los datos son opcionales, pero tiene que haber al menos uno.
+      const numeroOpcional = (valor) =>
+        valor === "" || valor === undefined || valor === null ? null : Number(valor);
 
-      if (!Number.isFinite(peso) || peso <= 0 || peso > 999) {
-        return respuesta({ error: "El peso debe ser un número mayor a 0." }, 400);
+      const datos = {};
+      for (const campo of CAMPOS_METRICA) {
+        const valor = numeroOpcional(body[campo.clave]);
+        const fueraDeRango =
+          valor < campo.min || (valor === campo.min && !campo.ceroValido) || valor > campo.max;
+        if (valor !== null && (!Number.isFinite(valor) || fueraDeRango)) {
+          return respuesta({ error: campo.error }, 400);
+        }
+        datos[campo.clave] = valor;
       }
-      if (grasa !== null && (!Number.isFinite(grasa) || grasa < 0 || grasa > 100)) {
-        return respuesta({ error: "El % de grasa debe estar entre 0 y 100." }, 400);
-      }
-      if (agua !== null && (!Number.isFinite(agua) || agua < 0 || agua > 100)) {
-        return respuesta({ error: "El % de agua debe estar entre 0 y 100." }, 400);
+      if (Object.values(datos).every((v) => v === null)) {
+        return respuesta({ error: "Ingresá al menos un dato: peso, grasa, agua o alguna medida." }, 400);
       }
 
+      // La fecha la manda el navegador (día local); si no, la de la base.
+      const fechaBody = String(body.fecha ?? "").trim();
+      const fecha = FECHA_RE.test(fechaBody) ? fechaBody : null;
       const persona = usuarioObjetivo.nombre;
 
-      // Un solo registro por usuario y día: si ya existe, se actualiza (upsert).
-      if (/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
-        await db.sql`
-          INSERT INTO metricas_corporales (persona, fecha, peso, grasa, agua, usuario_id)
-          VALUES (${persona}, ${fecha}, ${peso}, ${grasa}, ${agua}, ${usuarioObjetivo.id})
-          ON CONFLICT (usuario_id, fecha)
-          DO UPDATE SET peso = EXCLUDED.peso, grasa = EXCLUDED.grasa, agua = EXCLUDED.agua, created_at = NOW(), persona = EXCLUDED.persona
-        `;
-      } else {
-        await db.sql`
-          INSERT INTO metricas_corporales (persona, fecha, peso, grasa, agua, usuario_id)
-          VALUES (${persona}, CURRENT_DATE, ${peso}, ${grasa}, ${agua}, ${usuarioObjetivo.id})
-          ON CONFLICT (usuario_id, fecha)
-          DO UPDATE SET peso = EXCLUDED.peso, grasa = EXCLUDED.grasa, agua = EXCLUDED.agua, created_at = NOW(), persona = EXCLUDED.persona
-        `;
-      }
+      // Un solo registro por usuario y día: si ya existe, se reemplaza (upsert).
+      await db.sql`
+        INSERT INTO metricas_corporales
+          (persona, fecha, peso, grasa, agua, cintura, cadera, pecho, brazo, muslo, usuario_id)
+        VALUES (${persona}, COALESCE(${fecha}::date, CURRENT_DATE), ${datos.peso}, ${datos.grasa}, ${datos.agua}, ${datos.cintura},
+                ${datos.cadera}, ${datos.pecho}, ${datos.brazo}, ${datos.muslo}, ${usuarioObjetivo.id})
+        ON CONFLICT (usuario_id, fecha)
+        DO UPDATE SET peso = EXCLUDED.peso, grasa = EXCLUDED.grasa, agua = EXCLUDED.agua,
+                      cintura = EXCLUDED.cintura, cadera = EXCLUDED.cadera, pecho = EXCLUDED.pecho,
+                      brazo = EXCLUDED.brazo, muslo = EXCLUDED.muslo,
+                      created_at = NOW(), persona = EXCLUDED.persona
+      `;
 
       return respuesta({ ok: true }, 201);
     }
 
     if (action === "getMetricasHistory") {
       const historial = await db.sql`
-        SELECT id, fecha, peso, grasa, agua
+        SELECT id, fecha, peso, grasa, agua, cintura, cadera, pecho, brazo, muslo
         FROM metricas_corporales
         WHERE usuario_id = ${usuarioObjetivo.id}
         ORDER BY fecha DESC, created_at DESC
@@ -1806,9 +1820,7 @@ export default async (request) => {
         historial: historial.map((h) => ({
           id: Number(h.id),
           fecha: h.fecha,
-          peso: Number(h.peso),
-          grasa: h.grasa === null ? null : Number(h.grasa),
-          agua: h.agua === null ? null : Number(h.agua),
+          ...metricaDesdeFila(h),
         })),
       });
     }

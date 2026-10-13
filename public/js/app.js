@@ -273,11 +273,11 @@ function pedirPeso({ titulo, detalle = "", valor = "" }) {
 
 // Campo numérico con botones − / + propios (las flechas del navegador no
 // aparecen en el celular). Acepta coma o punto como decimal.
-function campoConPasos(id, { paso = 0.1, maximo = 999, requerido = false } = {}) {
+function campoConPasos(id, { paso = 0.1, maximo = 999 } = {}) {
   return `
     <div class="campo-pasos" data-paso="${paso}" data-maximo="${maximo}">
       <button type="button" class="campo-pasos-btn" data-direccion="-1" aria-label="Restar ${paso}">${icon("minus")}</button>
-      <input id="${id}" inputmode="decimal" autocomplete="off" ${requerido ? "required" : ""}>
+      <input id="${id}" inputmode="decimal" autocomplete="off">
       <button type="button" class="campo-pasos-btn" data-direccion="1" aria-label="Sumar ${paso}">${icon("plus")}</button>
     </div>
   `;
@@ -291,7 +291,10 @@ function activarCamposConPasos(contenedor) {
 
     campo.querySelectorAll(".campo-pasos-btn").forEach((boton) => {
       boton.addEventListener("click", () => {
-        const actual = Number(input.value.replace(",", "."));
+        // Si el campo está vacío se parte del valor de fondo (el último
+        // registrado), así las medidas no hace falta escribirlas de cero.
+        const texto = (input.value || input.placeholder || "0").replace(",", ".");
+        const actual = Number(texto);
         const base = Number.isFinite(actual) ? actual : 0;
         const nuevo = Math.round((base + paso * Number(boton.dataset.direccion)) * 10) / 10;
         input.value = formatPeso(Math.min(maximo, Math.max(0, nuevo)));
@@ -874,9 +877,35 @@ async function obtenerHistorialMetricas() {
   return result.historial || [];
 }
 
+// Datos de Mi progreso. Todos opcionales (al menos uno por registro). Las
+// medidas van plegadas en el formulario y cada dato tiene su propio gráfico.
+const METRICAS = [
+  { clave: "peso", nombre: "Peso", unidad: "kg", paso: 0.1, maximo: 999 },
+  { clave: "grasa", nombre: "Grasa", unidad: "%", paso: 0.1, maximo: 100 },
+  { clave: "agua", nombre: "Agua", unidad: "%", paso: 0.1, maximo: 100 },
+  { clave: "cintura", nombre: "Cintura", unidad: "cm", paso: 0.5, maximo: 400, medida: true },
+  { clave: "cadera", nombre: "Cadera", unidad: "cm", paso: 0.5, maximo: 400, medida: true },
+  { clave: "pecho", nombre: "Pecho", unidad: "cm", paso: 0.5, maximo: 400, medida: true },
+  { clave: "brazo", nombre: "Brazo", unidad: "cm", paso: 0.5, maximo: 200, medida: true },
+  { clave: "muslo", nombre: "Muslo", unidad: "cm", paso: 0.5, maximo: 200, medida: true },
+];
+const ID_CAMPO_METRICA = (clave) => `metrica${clave[0].toUpperCase()}${clave.slice(1)}`;
+let metricaGrafico = "peso"; // dato que se ve en el gráfico
+
+function tieneValor(v) {
+  return v !== null && v !== undefined;
+}
+
+function conUnidad(valor, unidad) {
+  return unidad === "%" ? `${formatPeso(valor)}%` : `${formatPeso(valor)} ${unidad}`;
+}
+
 async function renderInfoTab() {
   const persona = nombreUsuario();
   if (!persona) return;
+
+  const campo = (m, etiqueta) =>
+    `<div class="field"><label for="${ID_CAMPO_METRICA(m.clave)}">${etiqueta}</label>${campoConPasos(ID_CAMPO_METRICA(m.clave), m)}</div>`;
 
   infoSection.innerHTML = `
     <div class="day-head">
@@ -887,10 +916,17 @@ async function renderInfoTab() {
         <strong id="infoPersonaNombre"></strong>
       </div>
       <form id="metricaForm">
-        <div class="field"><label>Fecha</label><input type="date" id="metricaFecha" required></div>
-        <div class="field"><label for="metricaPeso">Peso corporal (kg)</label>${campoConPasos("metricaPeso", { requerido: true })}</div>
-        <div class="field"><label for="metricaGrasa">Grasa corporal % (opcional)</label>${campoConPasos("metricaGrasa", { maximo: 100 })}</div>
-        <div class="field"><label for="metricaAgua">Agua % (opcional)</label>${campoConPasos("metricaAgua", { maximo: 100 })}</div>
+        <div class="field"><label for="metricaFecha">Fecha</label><input type="date" id="metricaFecha" required></div>
+        ${campo(METRICAS[0], "Peso corporal (kg)")}
+        ${campo(METRICAS[1], "Grasa corporal % (opcional)")}
+        ${campo(METRICAS[2], "Agua % (opcional)")}
+        <details class="medidas-form" id="medidasForm">
+          <summary>${icon("chevron-down")} Medidas corporales (cm, opcional)</summary>
+          <p class="footer-note" style="margin:6px 0 0;text-align:left">
+            De fondo ves tu última medida: tocá − / + para partir de ella. Solo se guardan las que completes.
+          </p>
+          ${METRICAS.filter((m) => m.medida).map((m) => campo(m, m.nombre)).join("")}
+        </details>
         <p class="footer-note" id="metricaPrellenado" style="margin:0 0 10px;text-align:left" hidden></p>
         <button type="submit" class="main-btn">${icon("save")} Guardar registro del día</button>
       </form>
@@ -902,9 +938,6 @@ async function renderInfoTab() {
 
   const form = document.getElementById("metricaForm");
   const fechaInput = document.getElementById("metricaFecha");
-  const pesoInput = document.getElementById("metricaPeso");
-  const grasaInput = document.getElementById("metricaGrasa");
-  const aguaInput = document.getElementById("metricaAgua");
 
   fechaInput.value = fechaHoy();
   fechaInput.max = fechaHoy();
@@ -913,12 +946,22 @@ async function renderInfoTab() {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
 
-    const peso = Number(String(pesoInput.value).replace(",", "."));
-    const grasa = grasaInput.value === "" ? null : Number(String(grasaInput.value).replace(",", "."));
-    const agua = aguaInput.value === "" ? null : Number(String(aguaInput.value).replace(",", "."));
-
-    if (!Number.isFinite(peso) || peso <= 0) {
-      avisar("Ingresá un peso válido mayor a 0.");
+    const datos = { action: "logMetrica", fecha: fechaInput.value };
+    for (const m of METRICAS) {
+      const texto = document.getElementById(ID_CAMPO_METRICA(m.clave)).value.trim().replace(",", ".");
+      if (texto === "") {
+        datos[m.clave] = null;
+        continue;
+      }
+      const valor = Number(texto);
+      if (!Number.isFinite(valor) || valor < 0 || valor > m.maximo) {
+        avisar(`Revisá el valor de ${m.nombre.toLowerCase()}: tiene que ser un número entre 0 y ${m.maximo}.`);
+        return;
+      }
+      datos[m.clave] = valor;
+    }
+    if (METRICAS.every((m) => datos[m.clave] === null)) {
+      avisar("Ingresá al menos un dato: peso, grasa, agua o alguna medida.");
       return;
     }
 
@@ -926,13 +969,7 @@ async function renderInfoTab() {
       const response = await fetch("/api/rutina", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "logMetrica",
-          fecha: fechaInput.value,
-          peso,
-          grasa,
-          agua
-        })
+        body: JSON.stringify(datos)
       });
 
       const result = await response.json().catch(() => ({}));
@@ -951,29 +988,29 @@ async function renderInfoTab() {
   prellenarMetricas(await cargarHistorialMetricas());
 }
 
-// Carga el formulario con el último registro, para solo ajustarlo con los
-// botones − / +. No pisa lo que la persona ya haya escrito.
+// Peso, grasa y agua se cargan con el último valor registrado (para solo
+// ajustarlos). Las medidas lo muestran de fondo: se guardan solo si se
+// completan, para no repetir una medida vieja todos los días. No pisa lo
+// que la persona ya haya escrito.
 function prellenarMetricas(historial) {
-  const ultimo = historial && historial[0];
-  if (!ultimo) return;
+  if (!historial || !historial.length) return;
 
-  const campos = [
-    ["metricaPeso", ultimo.peso],
-    ["metricaGrasa", ultimo.grasa],
-    ["metricaAgua", ultimo.agua],
-  ];
   let algunoCargado = false;
-  for (const [id, valor] of campos) {
-    const input = document.getElementById(id);
-    if (input && input.value === "" && valor !== null && valor !== undefined) {
-      input.value = formatPeso(valor);
+  for (const m of METRICAS) {
+    const ultimo = historial.find((h) => tieneValor(h[m.clave]));
+    const input = document.getElementById(ID_CAMPO_METRICA(m.clave));
+    if (!ultimo || !input) continue;
+    if (m.medida) {
+      input.placeholder = formatPeso(ultimo[m.clave]);
+    } else if (input.value === "") {
+      input.value = formatPeso(ultimo[m.clave]);
       algunoCargado = true;
     }
   }
 
   const nota = document.getElementById("metricaPrellenado");
   if (nota && algunoCargado) {
-    nota.textContent = `Cargado con tu último registro (${formatFecha(ultimo.fecha)}). Ajustalo y guardá.`;
+    nota.textContent = "Cargado con tus últimos valores. Ajustalos y guardá.";
     nota.hidden = false;
   }
 }
@@ -993,12 +1030,14 @@ async function cargarHistorialMetricas() {
   }
 }
 
-function construirGraficoSVG(historialCompleto) {
-  if (historialCompleto.length < 2) return "";
+// Gráfico de un dato (peso, grasa, cintura…). `datos` viene del más
+// reciente al más antiguo y solo con registros que tienen ese dato.
+function construirGraficoSVG(datosRecientePrimero, clave) {
+  if (datosRecientePrimero.length < 2) return "";
 
   const MAX_PUNTOS = 30;
   // Orden cronológico (más antiguo primero) y nos quedamos con los más recientes.
-  const datos = [...historialCompleto].reverse().slice(-MAX_PUNTOS);
+  const datos = [...datosRecientePrimero].reverse().slice(-MAX_PUNTOS);
 
   const width = 600;
   const height = 220;
@@ -1009,9 +1048,9 @@ function construirGraficoSVG(historialCompleto) {
   const areaW = width - padLeft - padRight;
   const areaH = height - padTop - padBottom;
 
-  const pesos = datos.map((d) => d.peso);
-  const min = Math.min(...pesos);
-  const max = Math.max(...pesos);
+  const valores = datos.map((d) => d[clave]);
+  const min = Math.min(...valores);
+  const max = Math.max(...valores);
   const rango = max - min || 1;
 
   const fechas = datos.map((d) => new Date(`${d.fecha.slice(0, 10)}T00:00:00`).getTime());
@@ -1026,7 +1065,7 @@ function construirGraficoSVG(historialCompleto) {
       rangoFecha > 0
         ? padLeft + ((fechas[i] - minFecha) / rangoFecha) * areaW
         : padLeft + (areaW * i) / Math.max(datos.length - 1, 1);
-    const y = padTop + areaH * (1 - (d.peso - min) / rango);
+    const y = padTop + areaH * (1 - (d[clave] - min) / rango);
     return { x, y, d };
   });
 
@@ -1043,7 +1082,6 @@ function construirGraficoSVG(historialCompleto) {
   const paso = totalEtiquetas > 1 ? (datos.length - 1) / (totalEtiquetas - 1) : 0;
   const indices = new Set();
   for (let i = 0; i < totalEtiquetas; i += 1) indices.add(Math.round(i * paso));
-
   const etiquetasFecha = [...indices]
     .sort((a, b) => a - b)
     .map((i) => {
@@ -1066,33 +1104,46 @@ function construirGraficoSVG(historialCompleto) {
   `;
 }
 
-// Resumen arriba de la lista: último registro + total ganado/perdido desde
-// el primer registro guardado (historial viene ordenado del más reciente
-// al más antiguo).
-function construirResumenPeso(historial) {
-  if (!historial.length) return "";
+// Tarjeta del gráfico: botones para elegir el dato y, debajo, su último
+// valor, el cambio desde el primer registro y su gráfico.
+function construirTarjetaGrafico(historial) {
+  const disponibles = METRICAS.filter((m) => historial.some((h) => tieneValor(h[m.clave])));
+  if (!disponibles.length) return "";
+  if (!disponibles.some((m) => m.clave === metricaGrafico)) metricaGrafico = disponibles[0].clave;
 
-  const ultimo = historial[0];
-  const primero = historial[historial.length - 1];
-  const totalDiferencia = historial.length >= 2 ? ultimo.peso - primero.peso : null;
-
-  const claseTotal = totalDiferencia > 0 ? " up" : totalDiferencia < 0 ? " down" : "";
-  const signoTotal =
-    totalDiferencia > 0 ? `+${formatPeso(totalDiferencia)}` :
-    totalDiferencia < 0 ? `${formatPeso(totalDiferencia)}` :
-    totalDiferencia === 0 ? "0" : "";
+  const m = METRICAS.find((x) => x.clave === metricaGrafico);
+  const datos = historial.filter((h) => tieneValor(h[m.clave]));
+  const ultimo = datos[0];
+  const primero = datos[datos.length - 1];
+  const diferencia = datos.length >= 2 ? ultimo[m.clave] - primero[m.clave] : null;
+  const claseDif = diferencia > 0 ? " up" : diferencia < 0 ? " down" : "";
+  const textoDif =
+    diferencia > 0 ? `+${formatPeso(diferencia)}` : diferencia < 0 ? formatPeso(diferencia) : diferencia === 0 ? "0" : "";
 
   return `
-    <div class="metrica-card metrica-resumen">
-      <div class="history-info">
-        <span class="history-fecha">${formatFecha(ultimo.fecha)}</span>
-        <span class="history-peso">${formatPeso(ultimo.peso)}kg</span>
-        ${signoTotal ? `<span class="history-diff${claseTotal}">${signoTotal}</span>` : ""}
+    <div class="metrica-card">
+      <div class="metricas-selector" role="group" aria-label="Elegí qué gráfico ver">
+        ${disponibles
+          .map(
+            (x) =>
+              `<button type="button" class="metrica-chip" data-metrica="${x.clave}" aria-pressed="${x.clave === m.clave}">${x.nombre}</button>`
+          )
+          .join("")}
+      </div>
+      <div class="history-info" style="margin-top:12px">
+        <span class="history-fecha">${esc(m.nombre)} · ${formatFecha(ultimo.fecha)}</span>
+        <span class="history-peso">${conUnidad(ultimo[m.clave], m.unidad)}</span>
+        ${textoDif ? `<span class="history-diff${claseDif}">${textoDif}</span>` : ""}
       </div>
       ${
-        totalDiferencia !== null
-          ? `<p class="footer-note">Total desde el ${esc(formatFecha(primero.fecha))}</p>`
+        diferencia !== null
+          ? `<p class="footer-note" style="margin:4px 0 0;text-align:left">Cambio desde el ${esc(formatFecha(primero.fecha))}</p>`
           : ""
+      }
+      ${
+        datos.length >= 2
+          ? construirGraficoSVG(datos, m.clave)
+          : `<p class="footer-note" style="margin:10px 0 0;text-align:left">Con un registro más vas a ver el gráfico de ${esc(m.nombre.toLowerCase())}.</p>`
       }
     </div>
   `;
@@ -1106,30 +1157,31 @@ function renderHistorialMetricas(historial) {
     contenedor.innerHTML = `
       <div class="fallback" style="border-radius:16px">
         <h3>Sin registros todavía</h3>
-        <p>Guardá tu primer peso corporal para empezar a ver tu progreso.</p>
+        <p>Guardá tu peso o tus medidas para empezar a ver tu progreso.</p>
       </div>
     `;
     return;
   }
 
   const filas = historial
-    .map((m, index) => {
-      const anterior = historial[index + 1];
-      const diferencia = anterior ? m.peso - anterior.peso : null;
+    .map((reg, index) => {
+      // Diferencia de peso contra el registro anterior que tenga peso.
+      const anterior = historial.slice(index + 1).find((h) => tieneValor(h.peso));
+      const diferencia = tieneValor(reg.peso) && anterior ? reg.peso - anterior.peso : null;
       const signoClase = diferencia > 0 ? " up" : diferencia < 0 ? " down" : "";
       const signo =
         diferencia > 0 ? ` +${formatPeso(diferencia)}` :
         diferencia < 0 ? ` ${formatPeso(diferencia)}` : "";
 
-      const extras = [];
-      if (m.grasa !== null && m.grasa !== undefined) extras.push(`${formatPeso(m.grasa)}% grasa`);
-      if (m.agua !== null && m.agua !== undefined) extras.push(`${formatPeso(m.agua)}% agua`);
+      const extras = METRICAS.filter((m) => m.clave !== "peso" && tieneValor(reg[m.clave])).map(
+        (m) => `${m.nombre.toLowerCase()} ${conUnidad(reg[m.clave], m.unidad)}`
+      );
 
       return `
-        <div class="history-row" data-id="${m.id}">
+        <div class="history-row" data-id="${reg.id}">
           <div class="history-info">
-            <span class="history-fecha">${formatFecha(m.fecha)}</span>
-            <span class="history-peso">${formatPeso(m.peso)}kg</span>
+            <span class="history-fecha">${formatFecha(reg.fecha)}</span>
+            ${tieneValor(reg.peso) ? `<span class="history-peso">${formatPeso(reg.peso)}kg</span>` : ""}
             ${signo ? `<span class="history-diff${signoClase}">${signo}</span>` : ""}
             ${extras.length ? `<span class="history-diff">${esc(extras.join(" · "))}</span>` : ""}
           </div>
@@ -1143,14 +1195,16 @@ function renderHistorialMetricas(historial) {
     .join("");
 
   contenedor.innerHTML = `
-    ${construirResumenPeso(historial)}
-    ${
-      historial.length >= 2
-        ? `<div class="metrica-card"><strong>Evolución del peso</strong>${construirGraficoSVG(historial)}</div>`
-        : ""
-    }
+    ${construirTarjetaGrafico(historial)}
     <div class="history-list">${filas}</div>
   `;
+
+  contenedor.querySelectorAll(".metrica-chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      metricaGrafico = chip.dataset.metrica;
+      renderHistorialMetricas(historial);
+    });
+  });
 
   contenedor.querySelectorAll(".history-row").forEach((row) => {
     const id = Number(row.dataset.id);
@@ -1158,9 +1212,14 @@ function renderHistorialMetricas(historial) {
 
     row.querySelector(".metrica-edit").addEventListener("click", () => {
       document.getElementById("metricaFecha").value = registro.fecha.slice(0, 10);
-      document.getElementById("metricaPeso").value = registro.peso;
-      document.getElementById("metricaGrasa").value = registro.grasa ?? "";
-      document.getElementById("metricaAgua").value = registro.agua ?? "";
+      for (const m of METRICAS) {
+        document.getElementById(ID_CAMPO_METRICA(m.clave)).value = tieneValor(registro[m.clave])
+          ? formatPeso(registro[m.clave])
+          : "";
+      }
+      if (METRICAS.some((m) => m.medida && tieneValor(registro[m.clave]))) {
+        document.getElementById("medidasForm").open = true;
+      }
       document.getElementById("metricaForm").scrollIntoView({ behavior: "smooth", block: "start" });
     });
 
@@ -1177,7 +1236,7 @@ function renderHistorialMetricas(historial) {
         if (!response.ok || !result.ok) {
           throw new Error(result.error || "No se pudo eliminar el registro.");
         }
-        await cargarHistorialMetricas();
+        prellenarMetricas(await cargarHistorialMetricas());
       } catch (error) {
         avisar(error.message);
       }

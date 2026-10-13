@@ -489,3 +489,15 @@ html[data-tema="grafito"]{--bg:#f5f5f4;--ink:#1c1917;--muted:#6b6460;--line:#e7e
 .cal-semana-dato{white-space:nowrap;color:var(--muted)}
 .cal-semana-dato strong{color:var(--ink)}
 @media(max-width:520px){.cal-semana-fila{grid-template-columns:1fr auto}.cal-semana-barra{grid-column:1/-1;grid-row:2}}
+
+/* Mi progreso: medidas plegadas en el formulario y selector de gráfico. */
+.medidas-form{margin:4px 0 12px;border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.medidas-form summary{display:flex;align-items:center;gap:6px;cursor:pointer;list-style:none;font-weight:800;font-size:14px;color:var(--accent2)}
+.medidas-form summary::-webkit-details-marker{display:none}
+.medidas-form summary .icon{transition:transform .2s var(--ease)}
+.medidas-form[open] summary .icon{transform:rotate(180deg)}
+.medidas-form .campo-pasos input::placeholder{color:var(--muted);opacity:.6;font-weight:600}
+.metricas-selector{display:flex;gap:6px;flex-wrap:wrap}
+.metrica-chip{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:7px 12px;font:inherit;font-size:13px;font-weight:800;cursor:pointer;transition:background .15s var(--ease),border-color .15s var(--ease)}
+.metrica-chip:hover{border-color:var(--chip-borde)}
+.metrica-chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
