@@ -1,4 +1,4 @@
-const CACHE_NAME = "mi-rutina-shell-v25";
+const CACHE_NAME = "mi-rutina-shell-v26";
 
 const APP_SHELL = [
   "/",
@@ -6,7 +6,7 @@ const APP_SHELL = [
   "/css/estilos.css",
   "/js/app.js",
   "/js/importar-pdf.js",
-  "/icons/sprite.svg?v=3",
+  "/icons/sprite.svg?v=4",
   "/manifest.json",
   "/icons/icon-192.png",
   "/icons/icon-512.png"

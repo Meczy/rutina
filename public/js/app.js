@@ -27,6 +27,7 @@ const gestionarRutinasButton = document.getElementById("gestionarRutinasButton")
 const editorButton = document.getElementById("editorButton");
 const personaButton = document.getElementById("personaButton");
 const progresoButton = document.getElementById("progresoButton");
+const calendarioButton = document.getElementById("calendarioButton");
 const closeEditorButton = document.getElementById("closeEditor");
 const addDayButton = document.getElementById("addDay");
 const verCatalogoButton = document.getElementById("verCatalogoButton");
@@ -65,7 +66,7 @@ function esc(value) {
 
 // Subir SPRITE_VERSION cada vez que se agreguen íconos a sprite.svg: así el
 // navegador baja el archivo nuevo en vez de usar la copia guardada.
-const SPRITE_VERSION = "3";
+const SPRITE_VERSION = "4";
 
 function icon(nombre, clase = "") {
   return `<svg class="icon ${clase}" aria-hidden="true"><use href="/icons/sprite.svg?v=${SPRITE_VERSION}#${nombre}"></use></svg>`;
@@ -648,12 +649,214 @@ async function mostrarInfo() {
   tabsWrap.hidden = true;
   infoSection.classList.add("active");
   progresoButton.classList.add("active");
+  calendarioButton.classList.remove("active");
   diasButton.classList.remove("active");
   cerrarMenuNav();
 
   document.querySelectorAll(".tab").forEach((item) => item.classList.remove("active"));
 
   await renderInfoTab();
+}
+
+// ---------- Calendario: historial de entrenamientos ----------
+// Cada marca guarda la fecha y hora en que se hizo. Un día de la rutina
+// cuenta como completado en la fecha en que se marcó su último ejercicio.
+// En el calendario: círculo lleno = completaste un día de la rutina; borde =
+// entrenaste pero no lo terminaste.
+
+const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+const SEMANAS_CALENDARIO = 12;
+let calendarioMes = null; // { anio, mes } que se está viendo
+let calendarioFechaElegida = null;
+let calendarioDatos = null;
+
+function fechaLocal(valor) {
+  const d = new Date(valor);
+  const offsetMs = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - offsetMs).toISOString().slice(0, 10);
+}
+
+// Lunes de cada una de las últimas `cantidad` semanas (la actual primero).
+function ultimasSemanas(cantidad) {
+  const base = new Date(`${inicioSemana()}T12:00:00`);
+  return Array.from({ length: cantidad }, (_, i) => {
+    const d = new Date(base);
+    d.setDate(d.getDate() - 7 * i);
+    return fechaLocal(d);
+  });
+}
+
+// Agrupa las marcas por semana + día de rutina.
+function agruparEntrenamientos(marcas) {
+  const grupos = new Map();
+  for (const m of marcas) {
+    const clave = `${m.semana}|${m.diaId}`;
+    const g = grupos.get(clave) || { ...m, marcados: 0, ultima: m.fecha };
+    g.marcados += 1;
+    if (new Date(m.fecha) > new Date(g.ultima)) g.ultima = m.fecha;
+    grupos.set(clave, g);
+  }
+  return [...grupos.values()].map((g) => ({
+    ...g,
+    completo: g.totalDia > 0 && g.marcados >= g.totalDia,
+    fechaLocal: fechaLocal(g.ultima),
+  }));
+}
+
+async function mostrarCalendario() {
+  vista = "calendario";
+  content.hidden = true;
+  tabsWrap.hidden = true;
+  infoSection.classList.add("active");
+  calendarioButton.classList.add("active");
+  progresoButton.classList.remove("active");
+  diasButton.classList.remove("active");
+  cerrarMenuNav();
+
+  const hoy = new Date();
+  calendarioMes = { anio: hoy.getFullYear(), mes: hoy.getMonth() };
+  calendarioFechaElegida = fechaLocal(hoy);
+  infoSection.innerHTML = `<p class="footer-note">Cargando tu historial…</p>`;
+
+  try {
+    // Hasta un año para atrás.
+    const desde = new Date(`${inicioSemana()}T12:00:00`);
+    desde.setDate(desde.getDate() - 364);
+    const { marcas } = await api("historialEntrenamientos", { desde: fechaLocal(desde) });
+    calendarioDatos = { grupos: agruparEntrenamientos(marcas), desde: fechaLocal(desde) };
+    renderCalendario();
+  } catch (error) {
+    infoSection.innerHTML = `<p class="auth-error">${esc(error.message)}</p>`;
+  }
+}
+
+function renderCalendario() {
+  if (vista !== "calendario" || !calendarioDatos) return;
+  const { grupos, desde } = calendarioDatos;
+  const hoy = fechaLocal(new Date());
+
+  const porFecha = new Map();
+  for (const g of grupos) {
+    if (!porFecha.has(g.fechaLocal)) porFecha.set(g.fechaLocal, []);
+    porFecha.get(g.fechaLocal).push(g);
+  }
+
+  // Semanas: días completados y ejercicios hechos.
+  const semanas = ultimasSemanas(SEMANAS_CALENDARIO).map((semana) => {
+    const deLaSemana = grupos.filter((g) => g.semana === semana);
+    return {
+      semana,
+      dias: deLaSemana.filter((g) => g.completo).length,
+      ejercicios: deLaSemana.reduce((t, g) => t + g.marcados, 0),
+    };
+  });
+  const maxDias = Math.max(1, ...semanas.map((s) => s.dias), rutina.filter((d) => d.ejercicios.length).length);
+
+  // Racha: semanas seguidas con al menos un día completado (si esta semana
+  // todavía no tiene ninguno, se cuenta desde la anterior).
+  let racha = 0;
+  for (const [i, s] of semanas.entries()) {
+    if (s.dias > 0) racha += 1;
+    else if (i > 0) break;
+  }
+
+  const { anio, mes } = calendarioMes;
+  const prefijoMes = `${anio}-${String(mes + 1).padStart(2, "0")}`;
+  const diasDelMes = new Date(anio, mes + 1, 0).getDate();
+  const huecos = (new Date(anio, mes, 1).getDay() + 6) % 7; // lunes primero
+  const completadosMes = grupos.filter((g) => g.completo && g.fechaLocal.startsWith(prefijoMes)).length;
+  const hoyDate = new Date();
+  const esMesActual = anio === hoyDate.getFullYear() && mes === hoyDate.getMonth();
+  const hayAnterior = `${prefijoMes}-01` > desde;
+
+  let celdas = "";
+  for (let i = 0; i < huecos; i += 1) celdas += `<span class="cal-dia vacio" aria-hidden="true"></span>`;
+  for (let dia = 1; dia <= diasDelMes; dia += 1) {
+    const fecha = `${prefijoMes}-${String(dia).padStart(2, "0")}`;
+    const entradas = porFecha.get(fecha) || [];
+    const estado = entradas.some((g) => g.completo) ? "completo" : entradas.length ? "parcial" : "";
+    const clases = ["cal-dia", estado, fecha === hoy ? "hoy" : "", fecha === calendarioFechaElegida ? "elegido" : "", fecha > hoy ? "futuro" : ""]
+      .filter(Boolean)
+      .join(" ");
+    const etiqueta = `${dia} de ${MESES[mes]}${estado === "completo" ? ", día completado" : estado === "parcial" ? ", entrenamiento sin terminar" : ""}`;
+    celdas += `<button type="button" class="${clases}" data-fecha="${fecha}" aria-label="${etiqueta}" ${fecha > hoy ? "disabled" : ""}>${dia}</button>`;
+  }
+
+  const elegidas = porFecha.get(calendarioFechaElegida) || [];
+  const [, em, ed] = calendarioFechaElegida.split("-").map(Number);
+  const tituloElegida = `${ed} de ${MESES[em - 1]}${calendarioFechaElegida === hoy ? " (hoy)" : ""}`;
+
+  infoSection.innerHTML = `
+    <div class="day-head">
+      <h2>${icon("calendar-days")} Calendario</h2>
+      <span>${racha ? `Racha: ${racha} semana${racha === 1 ? "" : "s"} seguida${racha === 1 ? "" : "s"}` : "Completá un día para empezar tu racha"}</span>
+    </div>
+
+    <div class="metrica-card calendario-card">
+      <div class="cal-cabecera">
+        <button type="button" class="cal-nav" data-mes="-1" aria-label="Mes anterior" ${hayAnterior ? "" : "disabled"}>${icon("chevron-left")}</button>
+        <div class="cal-titulo">
+          <strong>${MESES[mes][0].toUpperCase() + MESES[mes].slice(1)} ${anio}</strong>
+          <span>${completadosMes} día${completadosMes === 1 ? "" : "s"} completado${completadosMes === 1 ? "" : "s"}</span>
+        </div>
+        <button type="button" class="cal-nav" data-mes="1" aria-label="Mes siguiente" ${esMesActual ? "disabled" : ""}>${icon("chevron-right")}</button>
+      </div>
+      <div class="cal-semana" aria-hidden="true"><span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span></div>
+      <div class="cal-grilla">${celdas}</div>
+      <div class="cal-leyenda">
+        <span><i class="cal-punto completo"></i> Día completado</span>
+        <span><i class="cal-punto parcial"></i> Sin terminar</span>
+      </div>
+      <div class="cal-detalle">
+        <strong>${tituloElegida}</strong>
+        ${
+          elegidas.length
+            ? `<ul>${elegidas
+                .map(
+                  (g) => `<li class="${g.completo ? "completo" : ""}">
+                    <span>Día ${g.diaNumero} · ${esc(g.diaNombre)}${misRutinas.length > 1 ? ` <em>(${esc(g.rutina)})</em>` : ""}</span>
+                    <span>${g.marcados}/${g.totalDia}${g.completo ? ` ${icon("check", "cal-ok")}` : ""}</span>
+                  </li>`
+                )
+                .join("")}</ul>`
+            : `<p class="footer-note" style="margin:4px 0 0;text-align:left">No hay entrenamientos registrados este día.</p>`
+        }
+      </div>
+    </div>
+
+    <div class="metrica-card">
+      <div class="metrica-card-head"><strong>Entrenamientos por semana</strong></div>
+      <div class="cal-semanas">
+        ${semanas
+          .map((s, i) => {
+            const pct = Math.round((s.dias / maxDias) * 100);
+            const [, sm, sd] = s.semana.split("-").map(Number);
+            return `
+              <div class="cal-semana-fila">
+                <span class="cal-semana-nombre">${i === 0 ? "Esta semana" : `Semana del ${sd}/${String(sm).padStart(2, "0")}`}</span>
+                <span class="cal-semana-barra"><span style="width:${pct}%"></span></span>
+                <span class="cal-semana-dato"><strong>${s.dias}</strong> día${s.dias === 1 ? "" : "s"} · ${s.ejercicios} ejerc.</span>
+              </div>`;
+          })
+          .join("")}
+      </div>
+      <p class="footer-note" style="margin:10px 0 0;text-align:left">Un día cuenta como completado cuando marcás todos sus ejercicios.</p>
+    </div>
+  `;
+
+  infoSection.querySelectorAll(".cal-nav").forEach((boton) => {
+    boton.addEventListener("click", () => {
+      const nuevo = new Date(anio, mes + Number(boton.dataset.mes), 1);
+      calendarioMes = { anio: nuevo.getFullYear(), mes: nuevo.getMonth() };
+      renderCalendario();
+    });
+  });
+  infoSection.querySelectorAll(".cal-dia[data-fecha]:not([disabled])").forEach((boton) => {
+    boton.addEventListener("click", () => {
+      calendarioFechaElegida = boton.dataset.fecha;
+      renderCalendario();
+    });
+  });
 }
 
 async function obtenerHistorialMetricas() {
@@ -1225,8 +1428,9 @@ function render() {
 
   content.hidden = vista !== "dias";
   tabsWrap.hidden = vista !== "dias";
-  infoSection.classList.toggle("active", vista === "info");
+  infoSection.classList.toggle("active", vista === "info" || vista === "calendario");
   progresoButton.classList.toggle("active", vista === "info");
+  calendarioButton.classList.toggle("active", vista === "calendario");
   diasButton.classList.toggle("active", vista === "dias");
   actualizarPersonaButton();
 }
@@ -1239,6 +1443,7 @@ function showDay(index) {
   tabsWrap.hidden = false;
   infoSection.classList.remove("active");
   progresoButton.classList.remove("active");
+  calendarioButton.classList.remove("active");
   diasButton.classList.add("active");
   cerrarMenuNav();
 
@@ -2648,6 +2853,7 @@ async function pintarCompartirRutina(contenedor, r, accion = "rutinaCompartida")
 }
 
 progresoButton.addEventListener("click", mostrarInfo);
+calendarioButton.addEventListener("click", mostrarCalendario);
 diasButton.addEventListener("click", () => showDay(currentDayIndex));
 
 // --- Menú de navegación: hamburguesa en celular, barra normal en escritorio ---

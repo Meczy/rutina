@@ -1065,6 +1065,38 @@ export default async (request) => {
       return respuesta({ ok: true, rutinas: await rutinasDeUsuario(usuarioObjetivo.id) });
     }
 
+    if (action === "historialEntrenamientos") {
+      // Para el Calendario: cada marca con la fecha y hora en que se hizo y
+      // el día de rutina al que pertenece (de cualquiera de tus rutinas). El
+      // navegador agrupa por fecha local y por semana.
+      const desde = String(body.desde ?? "");
+      if (!FECHA_RE.test(desde)) return respuesta({ error: "Fecha inválida." }, 400);
+
+      const filas = await db.sql`
+        SELECT m.semana::text AS semana, m.created_at, d.id AS dia_id, d.numero, d.nombre AS dia_nombre,
+               rt.nombre AS rutina, (SELECT COUNT(*) FROM ejercicios e2 WHERE e2.dia_id = d.id)::int AS total
+        FROM marcas_semana m
+        JOIN ejercicios e ON e.id = m.ejercicio_id
+        JOIN dias d ON d.id = e.dia_id
+        JOIN rutinas rt ON rt.id = d.rutina_id
+        WHERE m.usuario_id = ${usuarioObjetivo.id} AND m.semana >= ${desde}
+        ORDER BY m.created_at
+      `;
+
+      return respuesta({
+        ok: true,
+        marcas: filas.map((f) => ({
+          semana: f.semana,
+          fecha: f.created_at,
+          diaId: Number(f.dia_id),
+          diaNumero: Number(f.numero),
+          diaNombre: f.dia_nombre,
+          rutina: f.rutina,
+          totalDia: f.total,
+        })),
+      });
+    }
+
     if (action === "misRutinas") {
       return respuesta({ ok: true, rutinas: await rutinasDeUsuario(usuarioObjetivo.id) });
     }
