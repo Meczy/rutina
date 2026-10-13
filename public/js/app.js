@@ -28,7 +28,8 @@ const editorButton = document.getElementById("editorButton");
 const personaButton = document.getElementById("personaButton");
 const progresoButton = document.getElementById("progresoButton");
 const calendarioButton = document.getElementById("calendarioButton");
-const closeEditorButton = document.getElementById("closeEditor");
+const heroApp = document.getElementById("heroApp");
+const logoButton = document.getElementById("logoButton");
 const addDayButton = document.getElementById("addDay");
 const verCatalogoButton = document.getElementById("verCatalogoButton");
 const exportDataButton = document.getElementById("exportData");
@@ -344,11 +345,14 @@ function inicioSemana() {
 
 // Día que te toca: el primero de la semana que todavía no completaste
 // (según las marcas). Si ya completaste todos, el último.
+// Nunca es un día complementario.
 function indiceDiaQueToca() {
   const pendiente = rutina.findIndex(
-    (d) => d.ejercicios.length && !d.ejercicios.every((e) => marcasSemana.has(e.id))
+    (d) => d.ejercicios.length && !d.complementario && !d.ejercicios.every((e) => marcasSemana.has(e.id))
   );
-  return pendiente >= 0 ? pendiente : Math.max(0, rutina.length - 1);
+  if (pendiente >= 0) return pendiente;
+  const ultimo = rutina.map((d) => !d.complementario).lastIndexOf(true);
+  return ultimo >= 0 ? ultimo : Math.max(0, rutina.length - 1);
 }
 
 // --- Marcas de "hecho": se guardan en el servidor por semana (lunes), así
@@ -431,8 +435,13 @@ function renderConAnimacion() {
 }
 
 // Un día cuenta como entrenado cuando todos sus ejercicios están marcados.
+// Los días complementarios (por ejemplo, Abdomen) no cuentan.
+function diasDeEntrenamiento() {
+  return rutina.filter((d) => d.ejercicios.length && !d.complementario);
+}
+
 function actualizarDiasEntrenados() {
-  const conEjercicios = rutina.filter((d) => d.ejercicios.length);
+  const conEjercicios = diasDeEntrenamiento();
   const entrenados = conEjercicios.filter((d) => d.ejercicios.every((e) => marcasSemana.has(e.id)));
   diasEntrenadosEl.textContent = `${entrenados.length}/${conEjercicios.length}`;
 }
@@ -646,18 +655,47 @@ function renderHistorialPeso(exercise, persona, historial) {
 
 // --- Pestaña "Mi progreso": peso corporal, % grasa y % agua por día ---
 
-async function mostrarInfo() {
-  vista = "info";
-  content.hidden = true;
-  tabsWrap.hidden = true;
-  infoSection.classList.add("active");
-  progresoButton.classList.add("active");
-  calendarioButton.classList.remove("active");
-  diasButton.classList.remove("active");
+// --- Vistas de la app: "dias" (la rutina), "info" (Mi progreso),
+// "calendario" y "editor". El encabezado con los datos de la rutina solo se
+// muestra en la rutina. ---
+
+function aplicarVista() {
+  const enRutina = vista === "dias";
+  content.hidden = !enRutina;
+  tabsWrap.hidden = !enRutina;
+  heroApp.hidden = !enRutina;
+  infoSection.classList.toggle("active", vista === "info" || vista === "calendario");
+  editor.classList.toggle("open", vista === "editor");
+
+  diasButton.classList.toggle("active", enRutina);
+  progresoButton.classList.toggle("active", vista === "info");
+  calendarioButton.classList.toggle("active", vista === "calendario");
+  editorButton.classList.toggle("active", vista === "editor");
+}
+
+// La pantalla actual queda en la dirección (#progreso, #calendario, #editar)
+// para volver a ella al recargar. La rutina no lleva nada.
+const VISTA_EN_URL = { info: "progreso", calendario: "calendario", editor: "editar" };
+
+function cambiarVista(nueva) {
+  const cambio = vista !== nueva;
+  vista = nueva;
+  aplicarVista();
   cerrarMenuNav();
+  if (cambio) window.scrollTo({ top: 0 });
 
-  document.querySelectorAll(".tab").forEach((item) => item.classList.remove("active"));
+  const hash = VISTA_EN_URL[vista] ? `#${VISTA_EN_URL[vista]}` : "";
+  if (location.hash !== hash) history.replaceState(null, "", `${location.pathname}${location.search}${hash}`);
+}
 
+// Al abrir la app (o recargar), vuelve a la pantalla que dice la dirección.
+function restaurarVistaDeLaUrl() {
+  const abrir = { progreso: mostrarInfo, calendario: mostrarCalendario, editar: openEditor }[location.hash.slice(1)];
+  if (abrir) abrir();
+}
+
+async function mostrarInfo() {
+  cambiarVista("info");
   await renderInfoTab();
 }
 
@@ -701,20 +739,14 @@ function agruparEntrenamientos(marcas) {
   }
   return [...grupos.values()].map((g) => ({
     ...g,
-    completo: g.totalDia > 0 && g.marcados >= g.totalDia,
+    // Los días complementarios se listan pero no cuentan como completados.
+    completo: !g.complementario && g.totalDia > 0 && g.marcados >= g.totalDia,
     fechaLocal: fechaLocal(g.ultima),
   }));
 }
 
 async function mostrarCalendario() {
-  vista = "calendario";
-  content.hidden = true;
-  tabsWrap.hidden = true;
-  infoSection.classList.add("active");
-  calendarioButton.classList.add("active");
-  progresoButton.classList.remove("active");
-  diasButton.classList.remove("active");
-  cerrarMenuNav();
+  cambiarVista("calendario");
 
   const hoy = new Date();
   calendarioMes = { anio: hoy.getFullYear(), mes: hoy.getMonth() };
@@ -746,14 +778,14 @@ function renderCalendario() {
 
   // Semanas: días completados y ejercicios hechos.
   const semanas = ultimasSemanas(SEMANAS_CALENDARIO).map((semana) => {
-    const deLaSemana = grupos.filter((g) => g.semana === semana);
+    const deLaSemana = grupos.filter((g) => g.semana === semana && !g.complementario);
     return {
       semana,
       dias: deLaSemana.filter((g) => g.completo).length,
       ejercicios: deLaSemana.reduce((t, g) => t + g.marcados, 0),
     };
   });
-  const maxDias = Math.max(1, ...semanas.map((s) => s.dias), rutina.filter((d) => d.ejercicios.length).length);
+  const maxDias = Math.max(1, ...semanas.map((s) => s.dias), diasDeEntrenamiento().length);
 
   // Racha: semanas seguidas con al menos un día completado (si esta semana
   // todavía no tiene ninguno, se cuenta desde la anterior).
@@ -777,7 +809,8 @@ function renderCalendario() {
   for (let dia = 1; dia <= diasDelMes; dia += 1) {
     const fecha = `${prefijoMes}-${String(dia).padStart(2, "0")}`;
     const entradas = porFecha.get(fecha) || [];
-    const estado = entradas.some((g) => g.completo) ? "completo" : entradas.length ? "parcial" : "";
+    const deEntrenamiento = entradas.filter((g) => !g.complementario);
+    const estado = deEntrenamiento.some((g) => g.completo) ? "completo" : deEntrenamiento.length ? "parcial" : "";
     const clases = ["cal-dia", estado, fecha === hoy ? "hoy" : "", fecha === calendarioFechaElegida ? "elegido" : "", fecha > hoy ? "futuro" : ""]
       .filter(Boolean)
       .join(" ");
@@ -817,7 +850,9 @@ function renderCalendario() {
             ? `<ul>${elegidas
                 .map(
                   (g) => `<li class="${g.completo ? "completo" : ""}">
-                    <span>Día ${g.diaNumero} · ${esc(g.diaNombre)}${misRutinas.length > 1 ? ` <em>(${esc(g.rutina)})</em>` : ""}</span>
+                    <span>${g.complementario ? esc(g.diaNombre) : `Día ${g.diaNumero} · ${esc(g.diaNombre)}`}${
+                      g.complementario ? " <em>(complementario)</em>" : ""
+                    }${misRutinas.length > 1 ? ` <em>(${esc(g.rutina)})</em>` : ""}</span>
                     <span>${g.marcados}/${g.totalDia}${g.completo ? ` ${icon("check", "cal-ok")}` : ""}</span>
                   </li>`
                 )
@@ -1369,8 +1404,12 @@ function render() {
 
   rutina.forEach((day, dayIndex) => {
     const tab = document.createElement("button");
-    tab.className = "tab" + (dayIndex === currentDayIndex && vista === "dias" ? " active" : "");
-    tab.textContent = `Día ${day.numero}`;
+    tab.className =
+      "tab" +
+      (day.complementario ? " complementario" : "") +
+      (dayIndex === currentDayIndex && vista === "dias" ? " active" : "");
+    // Los días complementarios se nombran por su título (por ejemplo, "Abdomen").
+    tab.textContent = day.complementario ? day.titulo : `Día ${day.numero}`;
     tab.addEventListener("click", () => showDay(dayIndex));
     tabs.appendChild(tab);
 
@@ -1485,26 +1524,13 @@ function render() {
     content.appendChild(section);
   });
 
-  content.hidden = vista !== "dias";
-  tabsWrap.hidden = vista !== "dias";
-  infoSection.classList.toggle("active", vista === "info" || vista === "calendario");
-  progresoButton.classList.toggle("active", vista === "info");
-  calendarioButton.classList.toggle("active", vista === "calendario");
-  diasButton.classList.toggle("active", vista === "dias");
+  aplicarVista();
   actualizarPersonaButton();
 }
 
 function showDay(index) {
   currentDayIndex = index;
-  vista = "dias";
-
-  content.hidden = false;
-  tabsWrap.hidden = false;
-  infoSection.classList.remove("active");
-  progresoButton.classList.remove("active");
-  calendarioButton.classList.remove("active");
-  diasButton.classList.add("active");
-  cerrarMenuNav();
+  cambiarVista("dias");
 
   const tabButtons = [...tabs.querySelectorAll(".tab")];
   tabButtons.forEach((item, i) => {
@@ -1565,7 +1591,7 @@ function closeVideo() {
 }
 
 async function openEditor() {
-  editor.classList.add("open");
+  cambiarVista("editor");
   renderEditor();
 }
 
@@ -1687,7 +1713,29 @@ function renderEditor() {
         <button class="small icon-only danger delete-day-button" title="Eliminar día" aria-label="Eliminar día">${icon("trash-2")}<span class="btn-label"></span></button>
       </div>
     </div>
+    <label class="dia-complementario">
+      <input type="checkbox" id="dayComplementarioInput" ${day.complementario ? "checked" : ""}>
+      <span><b>Complementario</b> (por ejemplo, Abdomen): no cuenta como día de entrenamiento ni en "Días completados", el calendario o la racha.</span>
+    </label>
   `;
+
+  // Se guarda al tocarla, con el número y nombre que el día ya tiene.
+  heading.querySelector("#dayComplementarioInput").addEventListener("change", async (event) => {
+    try {
+      const result = await api("updateDay", {
+        id: day.id,
+        numero: Number(day.numero),
+        nombre: day.titulo,
+        complementario: event.target.checked,
+      });
+      rutina = result.rutina;
+      render();
+      renderEditor();
+    } catch (error) {
+      event.target.checked = !event.target.checked;
+      avisar(error.message);
+    }
+  });
 
   heading.querySelector(".save-day-name").addEventListener("click", saveDaySettings);
   heading.querySelector(".delete-day-button").addEventListener("click", deleteCurrentDay);
@@ -2399,10 +2447,8 @@ exportDataButton.addEventListener("click", () => {
   URL.revokeObjectURL(url);
 });
 
-editorButton.addEventListener("click", () => {
-  openEditor();
-  cerrarMenuNav();
-});
+editorButton.addEventListener("click", openEditor);
+logoButton.addEventListener("click", () => showDay(currentDayIndex));
 personaButton.addEventListener("click", () => {
   cerrarMenuNav();
   abrirMiCuenta();
@@ -2940,7 +2986,6 @@ document.addEventListener("click", (event) => {
   if (topnav.contains(event.target)) return;
   cerrarMenuNav();
 });
-closeEditorButton.addEventListener("click", () => editor.classList.remove("open"));
 closeVideoButton.addEventListener("click", closeVideo);
 modal.addEventListener("click", (event) => {
   if (event.target === modal) closeVideo();
@@ -3023,6 +3068,7 @@ let googleListo = false;
 function mostrarPantallaApp() {
   authScreen.hidden = true;
   appRoot.hidden = false;
+  restaurarVistaDeLaUrl();
   procesarInvitacionPendiente();
 }
 

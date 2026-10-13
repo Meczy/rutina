@@ -167,6 +167,7 @@ async function actividadPorSemana(usuarioIds, desde) {
            (SELECT COUNT(*) FROM ejercicios e2 WHERE e2.dia_id = e.dia_id)::int AS total
     FROM marcas_semana m
     JOIN ejercicios e ON e.id = m.ejercicio_id
+    JOIN dias d ON d.id = e.dia_id AND NOT d.complementario
     WHERE m.usuario_id = ANY(${usuarioIds}) AND m.semana >= ${desde}
     GROUP BY m.usuario_id, m.semana, e.dia_id
   `;
@@ -182,13 +183,14 @@ async function actividadPorSemana(usuarioIds, desde) {
   return (usuarioId, semana) => actividad.get(`${usuarioId}|${semana}`) || { dias: 0, ejercicios: 0 };
 }
 
-// Cantidad de días (con al menos un ejercicio) de la rutina activa de cada usuario.
+// Cantidad de días de entrenamiento (con ejercicios y sin contar los
+// complementarios) de la rutina activa de cada usuario.
 async function diasDeRutinaPorUsuario() {
   const filas = await db.sql`
     SELECT ru.usuario_id, COUNT(DISTINCT d.id)::int AS dias
     FROM rutina_usuarios ru
     JOIN dias d ON d.rutina_id = ru.rutina_id
-    WHERE ru.activa AND EXISTS (SELECT 1 FROM ejercicios e WHERE e.dia_id = d.id)
+    WHERE ru.activa AND NOT d.complementario AND EXISTS (SELECT 1 FROM ejercicios e WHERE e.dia_id = d.id)
     GROUP BY ru.usuario_id
   `;
   return new Map(filas.map((f) => [Number(f.usuario_id), f.dias]));
@@ -615,7 +617,7 @@ function validarRutinaImportada(diasBody) {
       });
     }
 
-    dias.push({ titulo, ejercicios });
+    dias.push({ titulo, ejercicios, complementario: dia?.complementario === true });
   }
 
   return { dias };
@@ -645,8 +647,8 @@ async function importarEnRutina(sql, rutinaId, dias, modo) {
   for (const [i, dia] of dias.entries()) {
     const numero = numeroBase + i + 1;
     const diaRows = await sql`
-      INSERT INTO dias (numero, nombre, orden, rutina_id)
-      VALUES (${numero}, ${dia.titulo}, ${numero}, ${rutinaId})
+      INSERT INTO dias (numero, nombre, orden, rutina_id, complementario)
+      VALUES (${numero}, ${dia.titulo}, ${numero}, ${rutinaId}, ${dia.complementario})
       RETURNING id
     `;
     const diaId = Number(diaRows[0].id);
@@ -732,7 +734,7 @@ function metricaDesdeFila(h) {
 
 async function obtenerRutina(rutinaId) {
   const dias = await db.sql`
-    SELECT id, numero, nombre, orden
+    SELECT id, numero, nombre, orden, complementario
     FROM dias
     WHERE rutina_id = ${rutinaId}
     ORDER BY orden, numero, id
@@ -777,6 +779,7 @@ async function obtenerRutina(rutinaId) {
     id: Number(dia.id),
     numero: Number(dia.numero),
     titulo: dia.nombre,
+    complementario: Boolean(dia.complementario),
     orden: Number(dia.orden),
     ejercicios: ejercicios
       .filter((e) => Number(e.dia_id) === Number(dia.id))
@@ -1091,7 +1094,7 @@ export default async (request) => {
       if (!FECHA_RE.test(desde)) return respuesta({ error: "Fecha inválida." }, 400);
 
       const filas = await db.sql`
-        SELECT m.semana::text AS semana, m.created_at, d.id AS dia_id, d.numero, d.nombre AS dia_nombre,
+        SELECT m.semana::text AS semana, m.created_at, d.id AS dia_id, d.numero, d.nombre AS dia_nombre, d.complementario,
                rt.nombre AS rutina, (SELECT COUNT(*) FROM ejercicios e2 WHERE e2.dia_id = d.id)::int AS total
         FROM marcas_semana m
         JOIN ejercicios e ON e.id = m.ejercicio_id
@@ -1109,6 +1112,7 @@ export default async (request) => {
           diaId: Number(f.dia_id),
           diaNumero: Number(f.numero),
           diaNombre: f.dia_nombre,
+          complementario: f.complementario,
           rutina: f.rutina,
           totalDia: f.total,
         })),
@@ -1224,6 +1228,11 @@ export default async (request) => {
         SET numero = ${numero}, nombre = ${nombre}, orden = ${numero}
         WHERE id = ${id}
       `;
+
+      // Solo se toca si viene en el pedido (el editor del admin no lo manda).
+      if (typeof body.complementario === "boolean") {
+        await db.sql`UPDATE dias SET complementario = ${body.complementario} WHERE id = ${id}`;
+      }
 
       return respuesta({ ok: true, rutina: await obtenerRutina(rutinaId) });
     }
