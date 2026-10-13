@@ -451,3 +451,41 @@ html[data-tema="grafito"]{--bg:#f5f5f4;--ink:#1c1917;--muted:#6b6460;--line:#e7e
 .admin-buscador .icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
 .admin-buscador input{width:100%;padding:11px 12px 11px 38px;border:1px solid var(--input-borde);border-radius:12px;font:inherit;font-size:16px;background:var(--card);color:var(--ink)}
 .admin-buscador input:focus{outline:2px solid var(--accent-foco);border-color:var(--accent)}
+
+/* ---------- Calendario (historial de entrenamientos) ---------- */
+.calendario-card{display:flex;flex-direction:column;gap:10px}
+.cal-cabecera{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.cal-titulo{display:flex;flex-direction:column;align-items:center;text-align:center}
+.cal-titulo strong{font-size:17px}
+.cal-titulo span{font-size:13px;color:var(--muted)}
+.cal-nav{width:38px;height:38px;display:grid;place-items:center;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+.cal-nav:hover:not(:disabled){background:var(--tinte)}
+.cal-nav:disabled{opacity:.35;cursor:default}
+.cal-nav .icon{width:18px;height:18px}
+.cal-semana,.cal-grilla{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;text-align:center}
+.cal-semana span{font-size:12px;font-weight:800;color:var(--muted)}
+.cal-dia{aspect-ratio:1;max-width:100%;border-radius:50%;border:2px solid transparent;background:none;font:inherit;font-size:14px;font-weight:700;color:var(--ink);cursor:pointer;display:grid;place-items:center;padding:0}
+.cal-dia.vacio{cursor:default}
+.cal-dia.futuro{color:var(--muted);opacity:.45;cursor:default}
+.cal-dia.parcial{border-color:var(--accent);color:var(--accent2)}
+.cal-dia.completo{background:var(--accent);color:#fff}
+.cal-dia.hoy:not(.completo){background:var(--soft)}
+.cal-dia.elegido{box-shadow:0 0 0 3px var(--accent-foco)}
+.cal-dia:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.cal-leyenda{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.cal-leyenda span{display:inline-flex;align-items:center;gap:6px}
+.cal-punto{width:12px;height:12px;border-radius:50%;display:inline-block;border:2px solid var(--accent)}
+.cal-punto.completo{background:var(--accent)}
+.cal-detalle{border-top:1px solid var(--line);padding-top:10px}
+.cal-detalle ul{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.cal-detalle li{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:10px;background:var(--tinte);font-size:14px}
+.cal-detalle li.completo{background:var(--chip-fondo);color:var(--accent2);font-weight:700}
+.cal-detalle li em{font-style:normal;color:var(--muted);font-weight:500}
+.cal-ok{width:16px;height:16px;vertical-align:-3px}
+.cal-semanas{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.cal-semana-fila{display:grid;grid-template-columns:minmax(120px,auto) 1fr auto;gap:10px;align-items:center;font-size:14px}
+.cal-semana-barra{height:10px;background:var(--tinte);border-radius:999px;overflow:hidden}
+.cal-semana-barra span{display:block;height:100%;background:var(--accent);border-radius:999px}
+.cal-semana-dato{white-space:nowrap;color:var(--muted)}
+.cal-semana-dato strong{color:var(--ink)}
+@media(max-width:520px){.cal-semana-fila{grid-template-columns:1fr auto}.cal-semana-barra{grid-column:1/-1;grid-row:2}}
