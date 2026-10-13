@@ -390,7 +390,7 @@ html[data-tema="grafito"]{--bg:#f5f5f4;--ink:#1c1917;--muted:#6b6460;--line:#e7e
 
 html[data-tema="lavanda"]{--bg:#f7f4fd;--ink:#231a33;--muted:#6e6480;--line:#e9e2f6;--accent:#8b5cf6;--accent2:#6d28d9;--soft:#ede4fe;--hero:linear-gradient(135deg,#1e1033 0%,#4c1d95 52%,#a78bfa 100%);--hero-sombra:rgba(76,29,149,.3);--accent-sombra:rgba(139,92,246,.28);--accent-foco:rgba(139,92,246,.18);--chip-borde:#d8c8fc;--chip-fondo:#f5f0ff;--soft-hover:#dccdfd;--tinte:#f4f1f9;--input-borde:#ddd3ee;--hover-suave:#f5f0ff}
 html[data-tema="coral"]{--bg:#fff6f3;--ink:#2e1a16;--muted:#7d6560;--line:#f5e1db;--accent:#dc4f3c;--accent2:#b8412f;--soft:#ffe3dc;--hero:linear-gradient(135deg,#2d0f0c 0%,#8f2d24 52%,#fb8a74 100%);--hero-sombra:rgba(143,45,36,.3);--accent-sombra:rgba(220,79,60,.28);--accent-foco:rgba(220,79,60,.18);--chip-borde:#fbc9bd;--chip-fondo:#fff3ef;--soft-hover:#fdd3c8;--tinte:#f8f1ef;--input-borde:#ecd7d1;--hover-suave:#fff3ef}
-html[data-tema="malva"]{--bg:#fbf5f6;--ink:#2b1c21;--muted:#77646a;--line:#efe0e4;--accent:#b4637a;--accent2:#8c4659;--soft:#f5e1e7;--hero:linear-gradient(135deg,#241318 0%,#6b3346 52%,#c98a9c 100%);--hero-sombra:rgba(107,51,70,.3);--accent-sombra:rgba(180,99,122,.28);--accent-foco:rgba(180,99,122,.18);--chip-borde:#e6c7d0;--chip-fondo:#fcf3f5;--soft-hover:#eccfd8;--tinte:#f6f0f2;--input-borde:#e5d5da;--hover-suave:#fcf3f5}
+html[data-tema="malva"]{--bg:#fbf5f6;--ink:#2b1c21;--muted:#77646a;--line:#efe0e4;--accent:#b4637a;--accent2:#8c4659;--soft:#f5e1e7;--hero:linear-gradient(135deg,#4a2233 0%,#8e4a63 52%,#c27390 100%);--hero-sombra:rgba(142,74,99,.3);--accent-sombra:rgba(180,99,122,.28);--accent-foco:rgba(180,99,122,.18);--chip-borde:#e6c7d0;--chip-fondo:#fcf3f5;--soft-hover:#eccfd8;--tinte:#f6f0f2;--input-borde:#e5d5da;--hover-suave:#fcf3f5}
 html[data-tema="carbon"]{--bg:#f4f4f5;--ink:#18181b;--muted:#63636b;--line:#e4e4e7;--accent:#dc2626;--accent2:#b91c1c;--soft:#fee2e2;--hero:linear-gradient(135deg,#09090b 0%,#27272a 55%,#3f3f46 100%);--hero-sombra:rgba(9,9,11,.3);--accent-sombra:rgba(220,38,38,.28);--accent-foco:rgba(220,38,38,.18);--chip-borde:#fecaca;--chip-fondo:#fef2f2;--soft-hover:#fecaca;--tinte:#f2f2f3;--input-borde:#dcdce0;--hover-suave:#fef2f2}
 
 /* Selector de paleta */
@@ -540,3 +540,4 @@ button.topnav-brand:focus-visible{outline:2px solid var(--accent-foco);outline-o
 .editor-dia-acciones{display:flex;gap:8px;flex-wrap:wrap}
 .editor-dia-acciones .main-btn,.editor-dia-acciones .small{display:inline-flex;align-items:center;gap:6px}
 @media(max-width:520px){.editor-dia-acciones > *{flex:1;justify-content:center}}
+.cal-ver-mas{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:12px}
