@@ -10,7 +10,10 @@
         // Los colores de la barra del celular están repetidos en TEMAS (js/app.js).
         try {
             var tema = localStorage.getItem("mecfit-tema");
-            var barra = { rosa: "#2b0d24", indigo: "#0b1020", petroleo: "#05161a", grafito: "#0c0a09" }[tema];
+            var barra = {
+                rosa: "#2b0d24", indigo: "#0b1020", petroleo: "#05161a", grafito: "#0c0a09",
+                lavanda: "#1e1033", coral: "#2d0f0c", malva: "#241318", carbon: "#09090b"
+            }[tema];
             if (barra) {
                 document.documentElement.dataset.tema = tema;
                 document.querySelector('meta[name="theme-color"]').content = barra;

@@ -205,7 +205,7 @@ async function crearRutinaPropia(usuarioId) {
 
 // Paletas de color disponibles (deben coincidir con TEMAS en public/js/app.js
 // y con el CHECK de la columna usuarios.tema).
-const TEMAS_VALIDOS = ["rosa", "indigo", "petroleo", "grafito"];
+const TEMAS_VALIDOS = ["rosa", "indigo", "petroleo", "grafito", "lavanda", "coral", "malva", "carbon"];
 
 // Paleta con la que arrancan las cuentas nuevas (las existentes sin paleta
 // elegida siguen con la rosa, que es la de por defecto en el CSS).

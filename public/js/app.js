@@ -82,6 +82,10 @@ const TEMAS = {
   indigo: { nombre: "Índigo noche", barra: "#0b1020", muestra: ["#1e1b4b", "#4f46e5", "#e8e7fd", "#f4f6fb"] },
   petroleo: { nombre: "Verde petróleo", barra: "#05161a", muestra: ["#0b4a47", "#0f8b7d", "#d7f0eb", "#f1f6f5"] },
   grafito: { nombre: "Grafito y naranja", barra: "#0c0a09", muestra: ["#292524", "#ea580c", "#ffedd5", "#f5f5f4"] },
+  lavanda: { nombre: "Lavanda", barra: "#1e1033", muestra: ["#4c1d95", "#8b5cf6", "#ede4fe", "#f7f4fd"] },
+  coral: { nombre: "Coral", barra: "#2d0f0c", muestra: ["#8f2d24", "#dc4f3c", "#ffe3dc", "#fff6f3"] },
+  malva: { nombre: "Malva", barra: "#241318", muestra: ["#6b3346", "#b4637a", "#f5e1e7", "#fbf5f6"] },
+  carbon: { nombre: "Carbón y rojo", barra: "#09090b", muestra: ["#27272a", "#dc2626", "#fee2e2", "#f4f4f5"] },
 };
 const TEMA_POR_DEFECTO = "rosa";
 const TEMA_KEY = "mecfit-tema";
