@@ -392,7 +392,7 @@ async function marcarEjercicio(exercise, hecho) {
   const semana = semanaMarcas || inicioSemana();
   if (hecho) marcasSemana.add(exercise.id);
   else marcasSemana.delete(exercise.id);
-  actualizarDiasEntrenados();
+  renderConAnimacion(); // reordena (hechos abajo) y actualiza contadores
 
   try {
     await api("marcarEjercicio", { ejercicio_id: exercise.id, semana, hecho });
@@ -402,6 +402,28 @@ async function marcarEjercicio(exercise, hecho) {
     render();
     avisar(error.message);
   }
+}
+
+// Vuelve a pintar animando el movimiento de las tarjetas del día visible
+// desde su lugar anterior al nuevo (técnica FLIP).
+function renderConAnimacion() {
+  const tarjetas = () => document.querySelectorAll(".day.active .card[data-ejercicio-id]");
+  const antes = new Map();
+  tarjetas().forEach((c) => antes.set(c.dataset.ejercicioId, c.getBoundingClientRect().top));
+
+  render();
+
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  tarjetas().forEach((c) => {
+    const topAntes = antes.get(c.dataset.ejercicioId);
+    if (topAntes === undefined || !c.animate) return;
+    const desplazamiento = topAntes - c.getBoundingClientRect().top;
+    if (Math.abs(desplazamiento) < 1) return;
+    c.animate([{ transform: `translateY(${desplazamiento}px)` }, { transform: "none" }], {
+      duration: 380,
+      easing: "cubic-bezier(.2,.8,.2,1)",
+    });
+  });
 }
 
 // Un día cuenta como entrenado cuando todos sus ejercicios están marcados.
@@ -1092,17 +1114,26 @@ function render() {
 
     const section = document.createElement("section");
     section.className = "day" + (dayIndex === currentDayIndex ? " active" : "");
+    const hechos = day.ejercicios.filter((e) => marcasSemana.has(e.id)).length;
     section.innerHTML = `
       <div class="day-head">
         <h2>${esc(day.titulo)}</h2>
-        <span>${day.ejercicios.length} ejercicios</span>
+        <span>${day.ejercicios.length} ejercicios · ${hechos}/${day.ejercicios.length} hechos</span>
       </div>
     `;
 
     const list = document.createElement("div");
     list.className = "exercise-list";
 
-    day.ejercicios.forEach((exercise, exerciseIndex) => {
+    // Los pendientes van arriba y los hechos abajo, cada grupo en el orden
+    // de la rutina. Como sale de las marcas de la semana, el lunes (cuando
+    // se reinician) vuelve solo al orden original. El número de cada
+    // ejercicio es el de su lugar en la rutina.
+    const ordenados = day.ejercicios
+      .map((exercise, exerciseIndex) => ({ exercise, exerciseIndex }))
+      .sort((a, b) => marcasSemana.has(a.exercise.id) - marcasSemana.has(b.exercise.id));
+
+    ordenados.forEach(({ exercise, exerciseIndex }) => {
       const completed = marcasSemana.has(exercise.id);
 
       const card = document.createElement("article");
@@ -1111,6 +1142,7 @@ function render() {
         : "";
 
       card.className = "card" + (completed ? " done" : "");
+      card.dataset.ejercicioId = String(exercise.id);
 
       const pesosHtml = (exercise.pesos || [])
         .map(
@@ -1181,7 +1213,6 @@ function render() {
       }
 
       card.querySelector(".check").addEventListener("change", (event) => {
-        card.classList.toggle("done", event.target.checked);
         marcarEjercicio(exercise, event.target.checked);
       });
 
