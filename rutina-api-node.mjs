@@ -1,4 +1,6 @@
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import { Pool } from "pg";
 import {
   hashPassword,
@@ -112,6 +114,117 @@ async function crearSesion(usuarioId) {
   `;
   await db.sql`UPDATE usuarios SET ultimo_uso = NOW() WHERE id = ${usuarioId}`;
   return token;
+}
+
+// ---------- Librería RepDB (ejercicios en español con imagen) ----------
+// Se descarga en el servidor con scripts/descargar-repdb.mjs (no está en git
+// por su licencia). La app solo recibe resultados de búsqueda, nunca el
+// dataset completo. Atribución: "Exercise data by RepDB (repdb.co)".
+
+const REPDB_JSON = path.join(import.meta.dirname, "datos-externos", "repdb", "exercises.json");
+
+const REPDB_PARTES = {
+  core: "Abdomen y core",
+  full_body: "Cuerpo completo",
+  back: "Espalda",
+  chest: "Pecho",
+  shoulders: "Hombros",
+  upper_arms: "Brazos",
+  upper_legs: "Piernas y glúteos",
+  lower_legs: "Pantorrillas",
+  lower_arms: "Antebrazos",
+};
+
+const REPDB_EQUIPOS = {
+  dumbbell: "Mancuernas", barbell: "Barra", ez_bar: "Barra Z", trap_bar: "Barra hexagonal",
+  kettlebell: "Pesa rusa", cable: "Polea", smith_machine: "Máquina Smith", flat_bench: "Banco",
+  pull_up_bar: "Barra de dominadas", resistance_band: "Banda elástica", loop_band: "Banda elástica",
+  suspension_trainer: "TRX", stability_ball: "Pelota", plates: "Discos", rings: "Anillas",
+  dip_station: "Paralelas", leg_press: "Prensa", plyo_box: "Cajón", jump_rope: "Cuerda",
+  battle_rope: "Cuerdas de batalla", ab_wheel: "Rueda abdominal",
+};
+
+function textoBusqueda(texto) {
+  return String(texto || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+
+let repdbCache = null;
+
+function repdbEjercicios() {
+  if (repdbCache) return repdbCache;
+  if (!fs.existsSync(REPDB_JSON)) return null;
+
+  const { exercises } = JSON.parse(fs.readFileSync(REPDB_JSON, "utf8"));
+  repdbCache = exercises.map((e) => {
+    const equipo = e.equipment && e.equipment !== "undefined" ? e.equipment : null;
+    return {
+      id: e.id,
+      nombre: e.name_es || e.name_en,
+      parte: e.body_part,
+      equipo: equipo ? REPDB_EQUIPOS[equipo] || (equipo.includes("machine") ? "Máquina" : equipo.replace(/_/g, " ")) : "Sin equipo",
+      imagen: `/librerias/repdb/${e.id}.webp`,
+      buscar: textoBusqueda(`${e.name_es} ${e.name_en}`),
+    };
+  });
+  repdbCache.sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  return repdbCache;
+}
+
+// ---------- wger (librería abierta, parte en español) ----------
+// Se descarga la lista completa una vez por día y se guarda en memoria.
+
+const WGER_A_PARTE = {
+  Abs: "core",
+  Arms: "upper_arms",
+  Back: "back",
+  Calves: "lower_legs",
+  Cardio: "full_body",
+  Chest: "chest",
+  Legs: "upper_legs",
+  Shoulders: "shoulders",
+};
+const WGER_IDIOMA_ES = 4;
+const WGER_IDIOMA_EN = 2;
+const UN_DIA_MS = 24 * 60 * 60 * 1000;
+
+let wgerCache = { cuando: 0, ejercicios: [] };
+
+async function wgerEjercicios() {
+  if (Date.now() - wgerCache.cuando < UN_DIA_MS) return wgerCache.ejercicios;
+  try {
+    const resp = await fetch("https://wger.de/api/v2/exerciseinfo/?limit=1000&format=json");
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const { results } = await resp.json();
+
+    const ejercicios = [];
+    for (const ex of results || []) {
+      const traducciones = Array.isArray(ex.translations) ? ex.translations : [];
+      const es = traducciones.find((t) => t.language === WGER_IDIOMA_ES && t.name);
+      const en = traducciones.find((t) => t.language === WGER_IDIOMA_EN && t.name);
+      const nombre = String((es || en)?.name || "").trim();
+      if (!nombre) continue;
+
+      const imagenes = Array.isArray(ex.images) ? ex.images : [];
+      let imagen = (imagenes.find((img) => img.is_main) || imagenes[0] || {}).image || "";
+      if (imagen && !/^https?:\/\//i.test(imagen)) imagen = `https://wger.de${imagen.startsWith("/") ? "" : "/"}${imagen}`;
+
+      ejercicios.push({
+        wgerId: Number(ex.id),
+        nombre,
+        enEspanol: Boolean(es),
+        imagen,
+        parte: WGER_A_PARTE[ex.category?.name] || "",
+        equipo: "",
+        buscar: textoBusqueda(nombre),
+      });
+    }
+    wgerCache = { cuando: Date.now(), ejercicios };
+  } catch (error) {
+    // Si wger no responde se usa lo que haya (o nada) y se reintenta en 10 min.
+    console.error("No se pudo actualizar wger:", error.message);
+    wgerCache = { cuando: Date.now() - UN_DIA_MS + 10 * 60 * 1000, ejercicios: wgerCache.ejercicios };
+  }
+  return wgerCache.ejercicios;
 }
 
 // ---------- Rutina compartida por código ----------
@@ -982,6 +1095,36 @@ export default async (request) => {
     const usuario = await usuarioDesdeRequest(request);
     if (!usuario) return respuesta({ ok: false, error: "No autorizado." }, 401);
 
+    if (action === "libreriaBuscar") {
+      // Búsqueda en RepDB y wger a la vez. Primero RepDB (todo en español y
+      // con imagen); después wger sin repetidos: en español con imagen, en
+      // español sin imagen, y al final el resto.
+      const parte = String(body.parte ?? "");
+      const texto = textoBusqueda(body.texto);
+      const coincide = (e) => (!parte || e.parte === parte) && (!texto || e.buscar.includes(texto));
+
+      const repdb = repdbEjercicios() || [];
+      const nombresRepdb = new Set(repdb.map((e) => textoBusqueda(e.nombre)));
+      const wger = (await wgerEjercicios())
+        .filter((e) => !nombresRepdb.has(e.buscar) && coincide(e))
+        .sort((a, b) => {
+          const prioridad = (e) => (e.enEspanol ? 0 : 2) + (e.imagen ? 0 : 1);
+          return prioridad(a) - prioridad(b) || a.nombre.localeCompare(b.nombre, "es");
+        });
+
+      const encontrados = [
+        ...repdb.filter(coincide).map((e) => ({ ...e, fuente: "RepDB" })),
+        ...wger.map((e) => ({ ...e, fuente: "wger" })),
+      ];
+
+      return respuesta({
+        ok: true,
+        partes: Object.entries(REPDB_PARTES).map(([id, nombre]) => ({ id, nombre })),
+        total: encontrados.length,
+        ejercicios: encontrados.slice(0, 60).map(({ buscar, enEspanol, ...e }) => e),
+      });
+    }
+
     if (action === "guardarTema") {
       const tema = String(body.tema ?? "");
       if (!TEMAS_VALIDOS.includes(tema)) return respuesta({ error: "Esa paleta no existe." }, 400);
@@ -1572,96 +1715,6 @@ export default async (request) => {
       await db.sql`DELETE FROM ejercicios_catalogo WHERE id = ${id}`;
 
       return respuesta({ ok: true, rutina: await obtenerRutina(rutinaId) });
-    }
-
-    if (action === "wgerCategorias") {
-      // La API de wger no traduce las categorías (siempre vienen en inglés),
-      // así que las traducimos nosotros con un diccionario fijo.
-      const CATEGORIAS_ES = {
-        Abs: "Abdominales",
-        Arms: "Brazos",
-        Back: "Espalda",
-        Calves: "Pantorrillas",
-        Cardio: "Cardio",
-        Chest: "Pecho",
-        Legs: "Piernas",
-        Shoulders: "Hombros",
-      };
-
-      try {
-        const resp = await fetch("https://wger.de/api/v2/exercisecategory/?format=json&limit=30");
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
-
-        const categorias = (data.results || [])
-          .map((c) => {
-            const nombreEn = String(c.name || "").trim();
-            return {
-              id: Number(c.id),
-              nombre: CATEGORIAS_ES[nombreEn] || nombreEn,
-            };
-          })
-          .filter((c) => c.nombre)
-          .sort((a, b) => a.nombre.localeCompare(b.nombre));
-
-        return respuesta({ ok: true, categorias });
-      } catch (error) {
-        return respuesta(
-          { error: "No se pudo conectar con la librería de ejercicios (wger). Probá de nuevo." },
-          502
-        );
-      }
-    }
-
-    if (action === "wgerBuscar") {
-      const categoriaId = Number(body.categoria_id);
-      const texto = String(body.texto ?? "").trim().toLowerCase();
-
-      try {
-        const params = new URLSearchParams({ format: "json", limit: "60" });
-        if (Number.isInteger(categoriaId) && categoriaId > 0) {
-          params.set("category", String(categoriaId));
-        }
-
-        const resp = await fetch(`https://wger.de/api/v2/exerciseinfo/?${params.toString()}`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
-
-        const ejercicios = (data.results || [])
-          .map((ex) => {
-            // IDs de idioma en wger: 4 = español, 2 = inglés (antes esto pedía
-            // inglés por error). Si no hay traducción en español, caemos a
-            // inglés y, si tampoco, a cualquier traducción disponible.
-            const traducciones = Array.isArray(ex.translations) ? ex.translations : [];
-            const traduccion =
-              traducciones.find((t) => t.language === 4 && t.name) ||
-              traducciones.find((t) => t.language === 2 && t.name) ||
-              traducciones.find((t) => t.name) ||
-              null;
-            const nombre = String(traduccion?.name || ex.name || "").trim();
-
-            const imagenes = Array.isArray(ex.images) ? ex.images : [];
-            const imagenObj = imagenes.find((img) => img.is_main) || imagenes[0] || null;
-            let imagen = imagenObj?.image || null;
-            if (imagen && !/^https?:\/\//i.test(imagen)) {
-              imagen = `https://wger.de${imagen.startsWith("/") ? "" : "/"}${imagen}`;
-            }
-
-            return { wger_id: Number(ex.id), nombre, imagen };
-          })
-          .filter((ex) => ex.nombre);
-
-        const filtrados = texto
-          ? ejercicios.filter((ex) => ex.nombre.toLowerCase().includes(texto))
-          : ejercicios;
-
-        return respuesta({ ok: true, ejercicios: filtrados.slice(0, 40) });
-      } catch (error) {
-        return respuesta(
-          { error: "No se pudo conectar con la librería de ejercicios (wger). Probá de nuevo." },
-          502
-        );
-      }
     }
 
     if (action === "deleteExercise") {

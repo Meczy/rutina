@@ -559,3 +559,9 @@ button.topnav-brand:focus-visible{outline:2px solid var(--accent-foco);outline-o
 .catalogo-seccion{margin:14px 0 8px;font-size:14px;color:var(--accent2)}
 .catalogo-seccion:first-child{margin-top:4px}
 .catalogo-origen{display:block;font-size:11px;color:var(--muted);font-weight:600;margin-top:2px}
+
+/* Formulario de ejercicio: botones de las librerías. */
+.librerias-boton{display:inline-flex;align-items:center;gap:6px}
+.fuente-repdb,.fuente-wger{font-weight:800;color:var(--accent2)}
+.creditos{font-size:12px;opacity:.85}
+.creditos a{color:inherit}
