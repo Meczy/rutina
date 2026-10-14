@@ -554,3 +554,8 @@ button.topnav-brand:focus-visible{outline:2px solid var(--accent-foco);outline-o
 .selector-archivo input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
 .selector-archivo-boton{display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#fff;font-weight:800;padding:10px 16px;border-radius:12px;box-shadow:0 6px 16px var(--accent-sombra)}
 .selector-archivo-nombre{color:var(--muted);font-size:14px;min-width:0;overflow-wrap:anywhere}
+
+/* Agregar ejercicio: secciones "De esta rutina" y "De tus otras rutinas". */
+.catalogo-seccion{margin:14px 0 8px;font-size:14px;color:var(--accent2)}
+.catalogo-seccion:first-child{margin-top:4px}
+.catalogo-origen{display:block;font-size:11px;color:var(--muted);font-weight:600;margin-top:2px}

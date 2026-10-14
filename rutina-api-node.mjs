@@ -1469,6 +1469,35 @@ export default async (request) => {
       });
     }
 
+    if (action === "catalogoOtrasRutinas") {
+      // Para "Agregar ejercicio": los ejercicios de tus otras rutinas que
+      // todavía no están en esta (uno por nombre), para copiarlos con su
+      // video e imagen. No incluye nada de rutinas de otras personas.
+      const filas = await db.sql`
+        SELECT DISTINCT ON (LOWER(TRIM(c.nombre)))
+               c.nombre, c.video_url, c.image_url, c.wger_id, rt.nombre AS rutina
+        FROM ejercicios_catalogo c
+        JOIN rutina_usuarios ru ON ru.rutina_id = c.rutina_id AND ru.usuario_id = ${usuarioObjetivo.id}
+        JOIN rutinas rt ON rt.id = c.rutina_id
+        WHERE c.rutina_id <> ${rutinaId}
+          AND NOT EXISTS (
+            SELECT 1 FROM ejercicios_catalogo c2
+            WHERE c2.rutina_id = ${rutinaId} AND LOWER(TRIM(c2.nombre)) = LOWER(TRIM(c.nombre))
+          )
+        ORDER BY LOWER(TRIM(c.nombre)), c.id DESC
+      `;
+      return respuesta({
+        ok: true,
+        ejercicios: filas.map((c) => ({
+          name: c.nombre,
+          url: c.video_url ?? "",
+          imageUrl: c.image_url ?? "",
+          wgerId: c.wger_id === null || c.wger_id === undefined ? null : Number(c.wger_id),
+          rutina: c.rutina,
+        })),
+      });
+    }
+
     if (action === "catalogoCrear") {
       const nombre = String(body.nombre ?? "").trim();
       if (!nombre) return respuesta({ error: "Escribí el nombre del ejercicio." }, 400);
