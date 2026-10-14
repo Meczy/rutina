@@ -43,7 +43,6 @@ const exerciseDescanso = document.getElementById("exerciseDescanso");
 const exerciseObservaciones = document.getElementById("exerciseObservaciones");
 const exerciseUrl = document.getElementById("exerciseUrl");
 const cancelExercise = document.getElementById("cancelExercise");
-const buscarWgerButton = document.getElementById("buscarWgerButton");
 const wgerPreview = document.getElementById("wgerPreview");
 const wgerPreviewImg = document.getElementById("wgerPreviewImg");
 const wgerPlaceholderIcon = document.getElementById("wgerPlaceholderIcon");
@@ -1942,7 +1941,107 @@ wgerAccionButton.addEventListener("click", () => {
   }
 });
 
-buscarWgerButton.addEventListener("click", abrirBuscadorWger);
+// --- Librería de ejercicios: busca a la vez en RepDB (todo en español y con
+// imagen) y en wger. Los datos viven en el servidor; acá solo se piden
+// resultados de búsqueda. ---
+
+document.getElementById("buscarLibreriaButton").addEventListener("click", abrirBuscadorLibreria);
+
+let libreriaPartes = [];
+
+async function abrirBuscadorLibreria() {
+  modalTitle.textContent = "Buscar en la librería";
+  modal.querySelector(".modal-card").classList.remove("vertical");
+  modalBody.innerHTML = `
+    <div class="wger-buscador">
+      <div class="wger-filtros">
+        <select id="libreriaParteSelect" aria-label="Zona del cuerpo">
+          <option value="">Todas las zonas</option>
+        </select>
+        <input type="text" id="libreriaTextoInput" placeholder="Buscar por nombre (ej.: sentadilla)">
+      </div>
+      <div id="libreriaResultados"><p class="footer-note">Cargando…</p></div>
+      <p class="footer-note creditos" style="margin:12px 0 0">
+        Ejercicios: <a href="https://repdb.co" target="_blank" rel="noopener">RepDB (repdb.co)</a> y
+        <a href="https://wger.de" target="_blank" rel="noopener">wger (wger.de)</a>
+      </p>
+    </div>
+  `;
+  modal.classList.add("open");
+
+  const parteSelect = document.getElementById("libreriaParteSelect");
+  const textoInput = document.getElementById("libreriaTextoInput");
+  let espera = null;
+
+  parteSelect.addEventListener("change", buscarEnLibreria);
+  textoInput.addEventListener("input", () => {
+    clearTimeout(espera);
+    espera = setTimeout(buscarEnLibreria, 250);
+  });
+
+  await buscarEnLibreria();
+}
+
+async function buscarEnLibreria() {
+  const parteSelect = document.getElementById("libreriaParteSelect");
+  const contenedor = document.getElementById("libreriaResultados");
+  if (!parteSelect || !contenedor) return;
+
+  try {
+    const result = await api("libreriaBuscar", {
+      parte: parteSelect.value,
+      texto: document.getElementById("libreriaTextoInput").value.trim(),
+    });
+
+    if (!libreriaPartes.length && result.partes) libreriaPartes = result.partes;
+    if (parteSelect.options.length === 1) {
+      parteSelect.insertAdjacentHTML(
+        "beforeend",
+        libreriaPartes.map((p) => `<option value="${esc(p.id)}">${esc(p.nombre)}</option>`).join("")
+      );
+    }
+    renderResultadosLibreria(result.ejercicios || [], result.total || 0);
+  } catch (error) {
+    contenedor.innerHTML = `<p class="footer-note">${esc(error.message)}</p>`;
+  }
+}
+
+function renderResultadosLibreria(ejercicios, total) {
+  const contenedor = document.getElementById("libreriaResultados");
+
+  if (!ejercicios.length) {
+    contenedor.innerHTML = `<p class="footer-note">Sin resultados. Probá con otra zona o palabra.</p>`;
+    return;
+  }
+
+  contenedor.innerHTML = `
+    ${total > ejercicios.length ? `<p class="footer-note" style="margin:0 0 8px;text-align:left">Mostrando ${ejercicios.length} de ${total}. Escribí para afinar la búsqueda.</p>` : ""}
+    <div class="wger-grid">
+      ${ejercicios
+        .map(
+          (ex, i) => `
+            <button type="button" class="wger-card" data-indice="${i}">
+              ${ex.imagen ? `<img src="${esc(ex.imagen)}" alt="${esc(ex.nombre)}" loading="lazy">` : `<div class="wger-card-sin-imagen">Sin imagen</div>`}
+              <span>${esc(ex.nombre)}</span>
+              <small class="catalogo-origen">${ex.equipo ? `${esc(ex.equipo)} · ` : ""}<span class="fuente-${esc(ex.fuente.toLowerCase())}">${esc(ex.fuente)}</span></small>
+            </button>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+
+  contenedor.querySelectorAll(".wger-card").forEach((card) => {
+    card.addEventListener("click", () => {
+      const ex = ejercicios[Number(card.dataset.indice)];
+      exerciseForm.dataset.wgerId = ex.wgerId ? String(ex.wgerId) : "";
+      exerciseForm.dataset.imageUrl = ex.imagen || "";
+      exerciseName.value = ex.nombre;
+      actualizarWgerPreview();
+      closeVideo();
+    });
+  });
+}
 
 // --- Subir una foto propia desde el celular/computadora (galería o cámara) ---
 
@@ -2251,109 +2350,6 @@ function renderGestionCatalogo(catalogo) {
       } catch (error) {
         avisar(error.message);
       }
-    });
-  });
-}
-
-async function abrirBuscadorWger() {
-  modalTitle.textContent = "Buscar en la librería de ejercicios (wger)";
-  modal.querySelector(".modal-card").classList.remove("vertical");
-  modalBody.innerHTML = `<p class="footer-note" style="padding:16px">Cargando categorías…</p>`;
-  modal.classList.add("open");
-
-  try {
-    const result = await api("wgerCategorias");
-    renderBuscadorWger(result.categorias || []);
-  } catch (error) {
-    modalBody.innerHTML = `
-      <div class="fallback" style="border-radius:16px">
-        <h3>No se pudo cargar</h3>
-        <p>${esc(error.message)}</p>
-      </div>
-    `;
-  }
-}
-
-function renderBuscadorWger(categorias) {
-  modalBody.innerHTML = `
-    <div class="wger-buscador">
-      <div class="wger-filtros">
-        <select id="wgerCategoriaSelect">
-          <option value="">Todas las categorías</option>
-          ${categorias.map((c) => `<option value="${c.id}">${esc(c.nombre)}</option>`).join("")}
-        </select>
-        <input type="text" id="wgerTextoInput" placeholder="Buscar por nombre">
-        <button type="button" class="small" id="wgerBuscarBtn">Buscar</button>
-      </div>
-      <div id="wgerResultados">
-        <p class="footer-note">Elegí una categoría (ej. Abs, Chest, Legs…) o escribí un nombre para buscar.</p>
-      </div>
-    </div>
-  `;
-
-  const categoriaSelect = document.getElementById("wgerCategoriaSelect");
-  const textoInput = document.getElementById("wgerTextoInput");
-
-  categoriaSelect.addEventListener("change", buscarEnWger);
-  document.getElementById("wgerBuscarBtn").addEventListener("click", buscarEnWger);
-  textoInput.addEventListener("keyup", (event) => {
-    if (event.key === "Enter") buscarEnWger();
-  });
-}
-
-async function buscarEnWger() {
-  const categoriaId = document.getElementById("wgerCategoriaSelect").value;
-  const texto = document.getElementById("wgerTextoInput").value.trim();
-  const contenedor = document.getElementById("wgerResultados");
-
-  if (!categoriaId && !texto) {
-    contenedor.innerHTML = `<p class="footer-note">Elegí una categoría o escribí un nombre para buscar.</p>`;
-    return;
-  }
-
-  contenedor.innerHTML = `<p class="footer-note">Buscando…</p>`;
-
-  try {
-    const result = await api("wgerBuscar", {
-      categoria_id: categoriaId || null,
-      texto
-    });
-    renderResultadosWger(result.ejercicios || []);
-  } catch (error) {
-    contenedor.innerHTML = `<p class="footer-note">${esc(error.message)}</p>`;
-  }
-}
-
-function renderResultadosWger(ejercicios) {
-  const contenedor = document.getElementById("wgerResultados");
-
-  if (!ejercicios.length) {
-    contenedor.innerHTML = `<p class="footer-note">Sin resultados. Probá con otra categoría o término.</p>`;
-    return;
-  }
-
-  contenedor.innerHTML = `
-    <div class="wger-grid">
-      ${ejercicios
-        .map(
-          (ex) => `
-            <button type="button" class="wger-card" data-wger-id="${ex.wger_id}" data-nombre="${esc(ex.nombre)}" data-imagen="${esc(ex.imagen || "")}">
-              ${ex.imagen ? `<img src="${esc(ex.imagen)}" alt="${esc(ex.nombre)}" loading="lazy">` : `<div class="wger-card-sin-imagen">Sin imagen</div>`}
-              <span>${esc(ex.nombre)}</span>
-            </button>
-          `
-        )
-        .join("")}
-    </div>
-  `;
-
-  contenedor.querySelectorAll(".wger-card").forEach((card) => {
-    card.addEventListener("click", () => {
-      exerciseForm.dataset.wgerId = card.dataset.wgerId;
-      exerciseForm.dataset.imageUrl = card.dataset.imagen;
-      exerciseName.value = card.dataset.nombre;
-      actualizarWgerPreview();
-      closeVideo();
     });
   });
 }

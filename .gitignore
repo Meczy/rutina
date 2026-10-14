@@ -18,3 +18,8 @@ Thumbs.db
 
 # Worktrees y archivos locales de Claude Code
 .claude/
+
+# Librería RepDB: se descarga en cada servidor con scripts/descargar-repdb.mjs.
+# Su licencia no permite volver a publicarla como dataset (y este repo es público).
+datos-externos/
+public/librerias/

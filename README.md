@@ -351,3 +351,22 @@ MecFit se encuentra desplegado y funcionando en producción con:
 * Cloudflare
 * HTTPS
 * Let's Encrypt
+
+## Librería de ejercicios RepDB
+
+El buscador "Buscar en librería (español)" usa el tier gratuito de
+[RepDB](https://repdb.co): 609 ejercicios con nombre e instrucciones en
+español e imágenes.
+
+Exercise data by [RepDB](https://repdb.co)
+
+Su licencia permite usarlo dentro de la app con atribución, pero **no**
+volver a publicarlo como dataset. Como este repositorio es público, los datos
+no están en git: se descargan en cada servidor (dev y producción) con
+
+```bash
+node scripts/descargar-repdb.mjs
+```
+
+que los guarda en `datos-externos/repdb/` y `public/librerias/repdb/`
+(ambas carpetas en `.gitignore`).
