@@ -227,6 +227,80 @@ async function wgerEjercicios() {
   return wgerCache.ejercicios;
 }
 
+// ---------- Enlaces e imágenes seguros ----------
+// Un video tiene que ser un enlace web (http/https): un "javascript:…"
+// guardado en una rutina compartida se ejecutaría al tocarlo otra persona.
+// Una imagen puede ser un enlace web, una foto subida (data:image, se
+// comprime en el navegador) o una imagen de la librería (/librerias/…).
+
+const ERROR_VIDEO = "El enlace del video tiene que empezar con https:// (por ejemplo, de YouTube o Instagram).";
+const ERROR_IMAGEN = "La imagen no es válida.";
+const MAX_IMAGEN_SUBIDA = 700_000; // caracteres de la imagen en base64 (~500 KB)
+
+// Devuelve el enlace limpio, "" si viene vacío, o null si no es válido.
+function videoSeguro(valor) {
+  const texto = String(valor ?? "").trim();
+  if (!texto) return "";
+  return /^https?:\/\/[^\s<>"']+$/i.test(texto) ? texto : null;
+}
+
+function imagenSegura(valor) {
+  const texto = String(valor ?? "").trim();
+  if (!texto) return "";
+  if (/^https?:\/\/[^\s<>"']+$/i.test(texto)) return texto;
+  if (/^\/librerias\/[a-z0-9/_.-]+$/i.test(texto) && !texto.includes("..")) return texto;
+  if (/^data:image\/(png|jpe?g|webp|gif);base64,[a-z0-9+/=]+$/i.test(texto) && texto.length <= MAX_IMAGEN_SUBIDA) {
+    return texto;
+  }
+  return null;
+}
+
+// ---------- Límite de intentos (inicio de sesión y cambio de contraseña) ----------
+// En memoria: se reinicia si se reinicia el servidor, que es suficiente para
+// frenar a quien prueba contraseñas sin parar.
+
+const INTENTOS_VENTANA_MS = 15 * 60 * 1000;
+const intentos = new Map(); // clave -> { fallos, desde, bloqueadoHasta }
+
+function minutosBloqueado(clave) {
+  const r = intentos.get(clave);
+  if (!r || !r.bloqueadoHasta) return 0;
+  const resta = r.bloqueadoHasta - Date.now();
+  if (resta <= 0) {
+    intentos.delete(clave);
+    return 0;
+  }
+  return Math.ceil(resta / 60000);
+}
+
+function registrarFallo(clave, maximo) {
+  const ahora = Date.now();
+  let r = intentos.get(clave);
+  if (!r || ahora - r.desde > INTENTOS_VENTANA_MS) r = { fallos: 0, desde: ahora, bloqueadoHasta: 0 };
+  r.fallos += 1;
+  if (r.fallos >= maximo) r.bloqueadoHasta = ahora + INTENTOS_VENTANA_MS;
+  intentos.set(clave, r);
+
+  // Limpieza ocasional para que el mapa no crezca sin fin.
+  if (intentos.size > 5000) {
+    for (const [k, v] of intentos) if (ahora - v.desde > INTENTOS_VENTANA_MS && v.bloqueadoHasta < ahora) intentos.delete(k);
+  }
+}
+
+// IP del visitante: Cloudflare la manda en CF-Connecting-IP; nginx, en
+// X-Real-IP. Se puede falsificar entrando directo al servidor, por eso el
+// límite principal es por correo.
+function ipDelPedido(request) {
+  return request.headers.get("cf-connecting-ip") || request.headers.get("x-real-ip") || "desconocida";
+}
+
+function respuestaBloqueo(minutos) {
+  return respuesta(
+    { error: `Demasiados intentos fallidos. Esperá ${minutos} minuto${minutos === 1 ? "" : "s"} y probá de nuevo.` },
+    429
+  );
+}
+
 // ---------- Rutina compartida por código ----------
 
 // Sin letras/números que se confundan al dictarlo (0/O, 1/I/L).
@@ -1027,13 +1101,21 @@ export default async (request) => {
       const email = String(body.email ?? "").trim().toLowerCase();
       const password = String(body.password ?? "");
 
+      const claveCorreo = `login:${email}`;
+      const claveIp = `login-ip:${ipDelPedido(request)}`;
+      const bloqueo = Math.max(minutosBloqueado(claveCorreo), minutosBloqueado(claveIp));
+      if (bloqueo) return respuestaBloqueo(bloqueo);
+
       const filas = await db.sql`
         SELECT id, email, nombre, password_hash FROM usuarios WHERE email = ${email}
       `;
 
       if (!filas.length || !verifyPassword(password, filas[0].password_hash)) {
+        registrarFallo(claveCorreo, 5);
+        registrarFallo(claveIp, 20);
         return respuesta({ error: "Correo o contraseña incorrectos." }, 401);
       }
+      intentos.delete(claveCorreo);
 
       const usuario = filas[0];
       const token = await crearSesion(Number(usuario.id));
@@ -1153,9 +1235,14 @@ export default async (request) => {
 
       const filas = await db.sql`SELECT password_hash FROM usuarios WHERE id = ${usuario.id}`;
       const hashActual = filas[0]?.password_hash;
+      const claveCambio = `cambio:${usuario.id}`;
+      const bloqueoCambio = minutosBloqueado(claveCambio);
+      if (bloqueoCambio) return respuestaBloqueo(bloqueoCambio);
       if (hashActual && !verifyPassword(actual, hashActual)) {
+        registrarFallo(claveCambio, 5);
         return respuesta({ error: "La contraseña actual no es correcta." }, 400);
       }
+      intentos.delete(claveCambio);
 
       await db.sql`UPDATE usuarios SET password_hash = ${hashPassword(nueva)} WHERE id = ${usuario.id}`;
       // Cierra las otras sesiones abiertas (por si alguien más la conocía).
@@ -1480,8 +1567,10 @@ export default async (request) => {
           );
         }
 
-        const videoUrl = String(body.video_url ?? "");
-        const imageUrl = String(body.image_url ?? "").trim();
+        const videoUrl = videoSeguro(body.video_url);
+        if (videoUrl === null) return respuesta({ error: ERROR_VIDEO }, 400);
+        const imageUrl = imagenSegura(body.image_url);
+        if (imageUrl === null) return respuesta({ error: ERROR_IMAGEN }, 400);
         const wgerId =
           body.wger_id === null || body.wger_id === undefined || body.wger_id === ""
             ? null
@@ -1564,11 +1653,13 @@ export default async (request) => {
           SELECT image_url, wger_id FROM ejercicios_catalogo WHERE id = ${catalogoId}
         `;
 
-        const videoUrl = String(body.video_url ?? "");
+        const videoUrl = videoSeguro(body.video_url);
+        if (videoUrl === null) return respuesta({ error: ERROR_VIDEO }, 400);
         const imageUrl =
           body.image_url === undefined
             ? actual[0].image_url ?? ""
-            : String(body.image_url ?? "").trim();
+            : imagenSegura(body.image_url);
+        if (imageUrl === null) return respuesta({ error: ERROR_IMAGEN }, 400);
         const wgerId =
           body.wger_id === undefined
             ? actual[0].wger_id === null || actual[0].wger_id === undefined
@@ -1650,8 +1741,10 @@ export default async (request) => {
         );
       }
 
-      const videoUrl = String(body.video_url ?? "");
-      const imageUrl = String(body.image_url ?? "").trim();
+      const videoUrl = videoSeguro(body.video_url);
+      if (videoUrl === null) return respuesta({ error: ERROR_VIDEO }, 400);
+      const imageUrl = imagenSegura(body.image_url);
+      if (imageUrl === null) return respuesta({ error: ERROR_IMAGEN }, 400);
       const wgerId =
         body.wger_id === null || body.wger_id === undefined || body.wger_id === ""
           ? null
@@ -1683,8 +1776,10 @@ export default async (request) => {
         );
       }
 
-      const videoUrl = String(body.video_url ?? "");
-      const imageUrl = String(body.image_url ?? "").trim();
+      const videoUrl = videoSeguro(body.video_url);
+      if (videoUrl === null) return respuesta({ error: ERROR_VIDEO }, 400);
+      const imageUrl = imagenSegura(body.image_url);
+      if (imageUrl === null) return respuesta({ error: ERROR_IMAGEN }, 400);
       const wgerId =
         body.wger_id === null || body.wger_id === undefined || body.wger_id === ""
           ? null
