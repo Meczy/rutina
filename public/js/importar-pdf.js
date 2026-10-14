@@ -268,7 +268,8 @@ async function leerRutinaDePdf(archivo) {
 
   let doc;
   try {
-    doc = await pdfjsLib.getDocument({ data: datos }).promise;
+    // isEvalSupported: false para respetar la política de contenido (sin eval).
+    doc = await pdfjsLib.getDocument({ data: datos, isEvalSupported: false }).promise;
   } catch {
     throw new Error("No se pudo abrir el archivo. ¿Es un PDF válido?");
   }
@@ -370,7 +371,7 @@ function renderVistaPreviaPdf(contenedor, dias, opciones) {
                         }${e.observaciones ? ` · ${esc(e.observaciones)}` : ""}</span>
                       </div>
                       ${
-                        e.video_url
+                        e.video_url && esEnlaceWeb(e.video_url)
                           ? `<a href="${esc(e.video_url)}" target="_blank" rel="noopener noreferrer">Ver video</a>`
                           : `<span class="footer-note">Sin video</span>`
                       }

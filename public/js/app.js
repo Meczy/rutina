@@ -307,6 +307,11 @@ function activarCamposConPasos(contenedor) {
   });
 }
 
+// Solo enlaces web (http/https) se muestran como enlace: nunca "javascript:…".
+function esEnlaceWeb(url) {
+  return /^https?:\/\//i.test(String(url || "").trim());
+}
+
 function youtubeEmbed(url) {
   const match = (url || "").match(
     /(?:youtube\.com\/(?:shorts\/|watch\?v=)|youtu\.be\/)([A-Za-z0-9_-]{6,})/
@@ -1580,7 +1585,11 @@ function openVideo(exercise) {
       <div class="fallback">
         <h3>Este video se abrirá en su plataforma original</h3>
         <p>La plataforma puede bloquear la reproducción dentro de esta página.</p>
-        <a href="${esc(exercise.url)}" target="_blank" rel="noopener noreferrer">Abrir video</a>
+        ${
+          esEnlaceWeb(exercise.url)
+            ? `<a href="${esc(exercise.url)}" target="_blank" rel="noopener noreferrer">Abrir video</a>`
+            : `<p>El enlace del video no es válido.</p>`
+        }
       </div>
     `;
   }
