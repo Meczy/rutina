@@ -2013,8 +2013,12 @@ async function abrirSelectorCatalogo() {
   modal.classList.add("open");
 
   try {
-    const result = await api("catalogoListar");
-    renderSelectorCatalogo(result.catalogo || []);
+    // Los de otras rutinas son un extra: si fallan, se muestra igual el catálogo.
+    const [catalogo, otras] = await Promise.all([
+      api("catalogoListar").then((r) => r.catalogo || []),
+      api("catalogoOtrasRutinas").then((r) => r.ejercicios || []).catch(() => []),
+    ]);
+    renderSelectorCatalogo(catalogo, otras);
   } catch (error) {
     modalBody.innerHTML = `
       <div class="fallback" style="border-radius:16px">
@@ -2025,14 +2029,16 @@ async function abrirSelectorCatalogo() {
   }
 }
 
-function renderSelectorCatalogo(catalogo) {
+// catalogo: ejercicios de esta rutina. otras: de tus otras rutinas (se
+// copian a esta al elegirlos).
+function renderSelectorCatalogo(catalogo, otras = []) {
   modalBody.innerHTML = `
     <div class="wger-buscador">
       <button type="button" class="main-btn" id="crearEjercicioNuevoBtn" style="width:100%;justify-content:center;margin-bottom:12px">
         ${icon("plus")} Crear ejercicio nuevo
       </button>
       <div class="wger-filtros">
-        <input type="text" id="catalogoTextoInput" placeholder="Buscar en tu catálogo">
+        <input type="text" id="catalogoTextoInput" placeholder="Buscar ejercicio">
       </div>
       <div id="catalogoResultados"></div>
     </div>
@@ -2046,58 +2052,74 @@ function renderSelectorCatalogo(catalogo) {
   const textoInput = document.getElementById("catalogoTextoInput");
   const pintar = () => {
     const texto = textoInput.value.trim().toLowerCase();
-    const filtrados = texto
-      ? catalogo.filter((c) => c.name.toLowerCase().includes(texto))
-      : catalogo;
-    renderResultadosCatalogo(filtrados, catalogo);
+    const coincide = (c) => !texto || c.name.toLowerCase().includes(texto);
+    renderResultadosCatalogo(catalogo.filter(coincide), otras.filter(coincide), Boolean(texto));
   };
   textoInput.addEventListener("input", pintar);
   pintar();
 }
 
-function renderResultadosCatalogo(filtrados, catalogoCompleto) {
-  const contenedor = document.getElementById("catalogoResultados");
-
-  if (!catalogoCompleto.length) {
-    contenedor.innerHTML = `<p class="footer-note">Todavía no tenés ejercicios en el catálogo. Creá el primero con el botón de arriba.</p>`;
-    return;
-  }
-
-  if (!filtrados.length) {
-    contenedor.innerHTML = `<p class="footer-note">Sin resultados para esa búsqueda.</p>`;
-    return;
-  }
-
-  contenedor.innerHTML = `
+function tarjetasCatalogo(items, origen) {
+  return `
     <div class="wger-grid">
-      ${filtrados
+      ${items
         .map(
-          (c) => `
-            <button type="button" class="wger-card" data-catalogo-id="${c.id}">
+          (c, i) => `
+            <button type="button" class="wger-card" data-origen="${origen}" data-indice="${i}">
               ${c.imageUrl ? `<img src="${esc(c.imageUrl)}" alt="${esc(c.name)}" loading="lazy">` : `<div class="wger-card-sin-imagen">Sin imagen</div>`}
               <span>${esc(c.name)}</span>
+              ${c.rutina ? `<small class="catalogo-origen">${esc(c.rutina)}</small>` : ""}
             </button>
           `
         )
         .join("")}
     </div>
   `;
+}
+
+function renderResultadosCatalogo(deEsta, deOtras, buscando) {
+  const contenedor = document.getElementById("catalogoResultados");
+
+  if (!deEsta.length && !deOtras.length) {
+    contenedor.innerHTML = buscando
+      ? `<p class="footer-note">Sin resultados para esa búsqueda.</p>`
+      : `<p class="footer-note">Todavía no tenés ejercicios en el catálogo. Creá el primero con el botón de arriba.</p>`;
+    return;
+  }
+
+  contenedor.innerHTML = `
+    <h4 class="catalogo-seccion">De esta rutina</h4>
+    ${deEsta.length ? tarjetasCatalogo(deEsta, "esta") : `<p class="footer-note" style="text-align:left">Ninguno coincide.</p>`}
+    ${
+      deOtras.length
+        ? `<h4 class="catalogo-seccion">De tus otras rutinas</h4>
+           <p class="footer-note" style="margin:0 0 8px;text-align:left">Al elegir uno se copia a esta rutina con su video e imagen.</p>
+           ${tarjetasCatalogo(deOtras, "otras")}`
+        : ""
+    }
+  `;
 
   contenedor.querySelectorAll(".wger-card").forEach((card) => {
     card.addEventListener("click", () => {
-      const item = catalogoCompleto.find((c) => String(c.id) === card.dataset.catalogoId);
-      if (item) abrirFormularioAsignacion(item);
+      const lista = card.dataset.origen === "otras" ? deOtras : deEsta;
+      const item = lista[Number(card.dataset.indice)];
+      if (item) abrirFormularioAsignacion(item, { copiar: card.dataset.origen === "otras" });
     });
   });
 }
 
-function abrirFormularioAsignacion(item) {
+// copiar = true: el ejercicio viene de otra rutina y se crea en el catálogo
+// de esta (con su nombre, video, imagen y wger) al agregarlo al día.
+function abrirFormularioAsignacion(item, { copiar = false } = {}) {
   modalTitle.textContent = item.name;
   modalBody.innerHTML = `
     <form id="asignarCatalogoForm" style="padding:16px;display:flex;flex-direction:column;gap:14px">
       <div class="wger-preview">
         <div class="wger-thumb">${item.imageUrl ? `<img src="${esc(item.imageUrl)}" alt="${esc(item.name)}">` : ""}</div>
-        <strong>${esc(item.name)}</strong>
+        <div>
+          <strong>${esc(item.name)}</strong>
+          ${copiar ? `<div class="footer-note" style="margin:2px 0 0;text-align:left">Se copia desde "${esc(item.rutina)}"</div>` : ""}
+        </div>
       </div>
       <div class="field"><label>Series</label><input id="asignarSeries"></div>
       <div class="field"><label>Repeticiones</label><input id="asignarReps"></div>
@@ -2114,14 +2136,26 @@ function abrirFormularioAsignacion(item) {
 
   document.getElementById("asignarCatalogoForm").addEventListener("submit", async (event) => {
     event.preventDefault();
-    const series = document.getElementById("asignarSeries").value.trim();
-    const repeticiones = document.getElementById("asignarReps").value.trim();
-    const descanso = document.getElementById("asignarDescanso").value.trim();
-    const observaciones = document.getElementById("asignarObservaciones").value.trim();
-    const day = rutina[selectedEditorDay];
+    const datos = {
+      dia_id: rutina[selectedEditorDay].id,
+      series: document.getElementById("asignarSeries").value.trim(),
+      repeticiones: document.getElementById("asignarReps").value.trim(),
+      descanso: document.getElementById("asignarDescanso").value.trim(),
+      observaciones: document.getElementById("asignarObservaciones").value.trim(),
+    };
+    if (copiar) {
+      Object.assign(datos, {
+        nombre: item.name,
+        video_url: item.url || "",
+        image_url: item.imageUrl || "",
+        wger_id: item.wgerId ?? "",
+      });
+    } else {
+      datos.catalogo_id = item.id;
+    }
 
     try {
-      await api("createExercise", { dia_id: day.id, catalogo_id: item.id, series, repeticiones, descanso, observaciones });
+      await api("createExercise", datos);
       closeVideo();
       await cargarRutina();
       renderEditor();
