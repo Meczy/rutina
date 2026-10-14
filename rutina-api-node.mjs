@@ -992,29 +992,28 @@ export default async (request) => {
 
       const existente = await db.sql`SELECT id, password_hash FROM usuarios WHERE email = ${email}`;
 
-      let usuarioId;
-
-      if (existente.length && existente[0].password_hash) {
-        return respuesta({ error: "Ya existe una cuenta con ese correo. Iniciá sesión." }, 409);
-      }
-
+      // Una cuenta que ya existe nunca se toca desde el registro: si no tiene
+      // contraseña (entra con Google), cualquiera que supiera el correo podría
+      // ponerle una y quedarse con la cuenta. La contraseña se crea desde
+      // "Mi cuenta", con la sesión iniciada.
       if (existente.length) {
-        // Cuenta "semilla" (creada sin contraseña, ej. cuentas iniciales) o
-        // cuenta que solo tenía Google: le asignamos la contraseña elegida.
-        usuarioId = Number(existente[0].id);
-        await db.sql`
-          UPDATE usuarios SET password_hash = ${hashPassword(password)}, nombre = ${nombre}
-          WHERE id = ${usuarioId}
-        `;
-      } else {
-        const rows = await db.sql`
-          INSERT INTO usuarios (email, nombre, password_hash, tema)
-          VALUES (${email}, ${nombre}, ${hashPassword(password)}, ${TEMA_CUENTAS_NUEVAS})
-          RETURNING id
-        `;
-        usuarioId = Number(rows[0].id);
-        await crearRutinaPropia(usuarioId);
+        return respuesta(
+          {
+            error: existente[0].password_hash
+              ? "Ya existe una cuenta con ese correo. Iniciá sesión."
+              : 'Ya existe una cuenta con ese correo. Entrá con Google y, si querés, creá una contraseña en "Mi cuenta".',
+          },
+          409
+        );
       }
+
+      const rows = await db.sql`
+        INSERT INTO usuarios (email, nombre, password_hash, tema)
+        VALUES (${email}, ${nombre}, ${hashPassword(password)}, ${TEMA_CUENTAS_NUEVAS})
+        RETURNING id
+      `;
+      const usuarioId = Number(rows[0].id);
+      await crearRutinaPropia(usuarioId);
 
       const token = await crearSesion(usuarioId);
       return respuesta(

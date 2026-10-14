@@ -52,6 +52,8 @@ ALTER TABLE dias ALTER COLUMN rutina_id SET NOT NULL;
 
 CREATE INDEX idx_dias_rutina ON dias(rutina_id);
 
+-- Los correos reales se reemplazaron por ejemplos al hacer público el
+-- repositorio (esta migración ya estaba aplicada; no se vuelve a ejecutar).
 INSERT INTO usuarios (email, nombre) VALUES
     ('cuenta1@ejemplo.com', 'Meczy'),
     ('cuenta2@ejemplo.com', 'María');
