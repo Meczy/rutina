@@ -287,11 +287,12 @@ function registrarFallo(clave, maximo) {
   }
 }
 
-// IP del visitante: Cloudflare la manda en CF-Connecting-IP; nginx, en
-// X-Real-IP. Se puede falsificar entrando directo al servidor, por eso el
-// límite principal es por correo.
+// IP del visitante: nginx la manda en X-Real-IP, ya tomada de
+// CF-Connecting-IP solo si el pedido viene de Cloudflare (ver
+// cloudflare-real-ip.conf en nginx). CF-Connecting-IP no se lee acá porque
+// cualquiera puede inventarlo.
 function ipDelPedido(request) {
-  return request.headers.get("cf-connecting-ip") || request.headers.get("x-real-ip") || "desconocida";
+  return request.headers.get("x-real-ip") || "desconocida";
 }
 
 function respuestaBloqueo(minutos) {
@@ -1350,6 +1351,15 @@ export default async (request) => {
 
     if (action === "misRutinas") {
       return respuesta({ ok: true, rutinas: await rutinasDeUsuario(usuarioObjetivo.id) });
+    }
+
+    if (action === "verRutina") {
+      // Para exportar a PDF cualquiera de tus rutinas, no solo la activa.
+      const elegida = Number(body.rutina_id);
+      if (!Number.isInteger(elegida) || !(await usuarioTieneRutina(usuarioObjetivo.id, elegida))) {
+        return respuesta({ error: "Esa rutina no está en tu lista." }, 404);
+      }
+      return respuesta({ ok: true, rutina: await obtenerRutina(elegida) });
     }
 
     if (action === "activarRutina") {

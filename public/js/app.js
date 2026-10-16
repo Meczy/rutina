@@ -2828,6 +2828,7 @@ async function cargarPanelRutinas() {
                 <div class="mis-rutinas-acciones">
                   ${r.activa ? "" : `<button type="button" class="main-btn" data-accion="usar">Activar</button>`}
                   <button type="button" class="small" data-accion="renombrar">${icon("pencil")} Renombrar</button>
+                  <button type="button" class="small" data-accion="exportar">${icon("download")} Exportar PDF</button>
                   ${misRutinas.length > 1 ? `<button type="button" class="small danger" data-accion="salir">Salir</button>` : ""}
                 </div>
                 <div class="rutina-item-compartir" data-compartir>
@@ -2888,6 +2889,23 @@ async function cargarPanelRutinas() {
         await refrescar();
       } catch (error) {
         avisar(error.message);
+      }
+    });
+
+    item.querySelector('[data-accion="exportar"]').addEventListener("click", async (event) => {
+      const boton = event.currentTarget;
+      boton.disabled = true;
+      try {
+        const { rutina } = await api("verRutina", { rutina_id: r.id });
+        if (!rutina.length) {
+          avisar('Esta rutina todavía no tiene días. Agregáselos desde "Editar rutina" y después exportala.');
+          return;
+        }
+        await exportarRutinaPdf(r.nombre, rutina);
+      } catch (error) {
+        avisar(error.message);
+      } finally {
+        boton.disabled = false;
       }
     });
 
