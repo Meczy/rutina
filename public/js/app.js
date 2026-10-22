@@ -1541,6 +1541,29 @@ function render() {
     });
 
     section.appendChild(list);
+
+    // Descarga solo este día, con los ejercicios que tiene ahora, en el
+    // orden de la rutina.
+    if (day.ejercicios.length) {
+      const descargar = document.createElement("button");
+      descargar.type = "button";
+      descargar.className = "descargar-dia";
+      descargar.innerHTML = `${icon("download")} Descargar este día`;
+      descargar.addEventListener("click", async () => {
+        descargar.disabled = true;
+        try {
+          const nombreRutina = misRutinas.find((r) => r.activa)?.nombre || "Rutina";
+          const nombreDia = day.complementario ? day.titulo : `Día ${day.numero}`;
+          await exportarRutinaPdf(nombreRutina, [day], `${nombreRutina} - ${nombreDia}`);
+        } catch (error) {
+          avisar(error.message);
+        } finally {
+          descargar.disabled = false;
+        }
+      });
+      section.appendChild(descargar);
+    }
+
     content.appendChild(section);
   });
 
