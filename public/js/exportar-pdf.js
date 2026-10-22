@@ -234,8 +234,9 @@ function armarPdfRutina(nombreRutina, dias) {
 
 // En el celular abre el menú de compartir (guardar en archivos, WhatsApp…);
 // en la computadora, o si el celular no lo permite, lo descarga.
-async function exportarRutinaPdf(nombreRutina, dias) {
-  const nombreArchivo = `${nombreRutina.replace(/[\\/:*?"<>|]+/g, " ").trim() || "Rutina"} - MecFit.pdf`;
+// `nombreBase` cambia el nombre del archivo (por ejemplo, al bajar un solo día).
+async function exportarRutinaPdf(nombreRutina, dias, nombreBase = nombreRutina) {
+  const nombreArchivo = `${nombreBase.replace(/[\\/:*?"<>|]+/g, " ").trim() || "Rutina"} - MecFit.pdf`;
   const archivo = new File([armarPdfRutina(nombreRutina, dias)], nombreArchivo, { type: "application/pdf" });
 
   if (matchMedia("(pointer: coarse)").matches && navigator.canShare?.({ files: [archivo] })) {
