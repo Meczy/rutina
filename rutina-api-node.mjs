@@ -1324,10 +1324,12 @@ export default async (request) => {
       if (!FECHA_RE.test(desde)) return respuesta({ error: "Fecha inválida." }, 400);
 
       const filas = await db.sql`
-        SELECT m.semana::text AS semana, m.created_at, d.id AS dia_id, d.numero, d.nombre AS dia_nombre, d.complementario,
+        SELECT m.semana::text AS semana, m.created_at, c.nombre AS ejercicio, e.orden,
+               d.id AS dia_id, d.numero, d.nombre AS dia_nombre, d.complementario,
                rt.nombre AS rutina, (SELECT COUNT(*) FROM ejercicios e2 WHERE e2.dia_id = d.id)::int AS total
         FROM marcas_semana m
         JOIN ejercicios e ON e.id = m.ejercicio_id
+        JOIN ejercicios_catalogo c ON c.id = e.catalogo_id
         JOIN dias d ON d.id = e.dia_id
         JOIN rutinas rt ON rt.id = d.rutina_id
         WHERE m.usuario_id = ${usuarioObjetivo.id} AND m.semana >= ${desde}
@@ -1339,6 +1341,8 @@ export default async (request) => {
         marcas: filas.map((f) => ({
           semana: f.semana,
           fecha: f.created_at,
+          ejercicio: f.ejercicio,
+          orden: f.orden,
           diaId: Number(f.dia_id),
           diaNumero: Number(f.numero),
           diaNombre: f.dia_nombre,

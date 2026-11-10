@@ -679,7 +679,18 @@ function aplicarVista() {
   progresoButton.classList.toggle("active", vista === "info");
   calendarioButton.classList.toggle("active", vista === "calendario");
   editorButton.classList.toggle("active", vista === "editor");
+
+  // El menú de abajo (celular) marca lo mismo que el de arriba.
+  for (const boton of bottomNav.querySelectorAll("[data-destino]")) {
+    boton.classList.toggle("active", document.getElementById(boton.dataset.destino).classList.contains("active"));
+  }
 }
+
+const bottomNav = document.getElementById("bottomNav");
+bottomNav.addEventListener("click", (event) => {
+  const boton = event.target.closest("[data-destino]");
+  if (boton) document.getElementById(boton.dataset.destino).click();
+});
 
 // La pantalla actual queda en la dirección (#progreso, #calendario, #editar)
 // para volver a ella al recargar. La rutina no lleva nada.
@@ -708,10 +719,11 @@ async function mostrarInfo() {
 }
 
 // ---------- Calendario: historial de entrenamientos ----------
-// Cada marca guarda la fecha y hora en que se hizo. Un día de la rutina
-// cuenta como completado en la fecha en que se marcó su último ejercicio.
-// En el calendario: círculo lleno = completaste un día de la rutina; borde =
-// entrenaste pero no lo terminaste.
+// Cada marca guarda la fecha y hora en que se hizo, y cada fecha muestra solo
+// los ejercicios marcados ese día. En el calendario: círculo lleno = ese día
+// hiciste todos los ejercicios de un día de la rutina; borde = hiciste una
+// parte. En "Entrenamientos por semana" un día de la rutina cuenta como
+// completado si se terminó en la semana, aunque haya sido en varios días.
 
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 const SEMANAS_CALENDARIO = 12;
@@ -755,6 +767,24 @@ function agruparEntrenamientos(marcas) {
   }));
 }
 
+// Agrupa las marcas por fecha (local) + día de rutina, con los ejercicios
+// que se hicieron esa fecha en el orden de la rutina.
+function agruparPorFecha(marcas) {
+  const grupos = new Map();
+  for (const m of marcas) {
+    const fecha = fechaLocal(m.fecha);
+    const clave = `${fecha}|${m.diaId}`;
+    const g = grupos.get(clave) || { ...m, fechaLocal: fecha, ejercicios: [] };
+    g.ejercicios.push({ nombre: m.ejercicio, orden: m.orden });
+    grupos.set(clave, g);
+  }
+  return [...grupos.values()].map((g) => ({
+    ...g,
+    ejercicios: g.ejercicios.sort((a, b) => a.orden - b.orden).map((e) => e.nombre),
+    completo: !g.complementario && g.totalDia > 0 && g.ejercicios.length >= g.totalDia,
+  }));
+}
+
 async function mostrarCalendario() {
   cambiarVista("calendario");
 
@@ -769,7 +799,11 @@ async function mostrarCalendario() {
     const desde = new Date(`${inicioSemana()}T12:00:00`);
     desde.setDate(desde.getDate() - 364);
     const { marcas } = await api("historialEntrenamientos", { desde: fechaLocal(desde) });
-    calendarioDatos = { grupos: agruparEntrenamientos(marcas), desde: fechaLocal(desde) };
+    calendarioDatos = {
+      grupos: agruparEntrenamientos(marcas),
+      porDia: agruparPorFecha(marcas),
+      desde: fechaLocal(desde),
+    };
     renderCalendario();
   } catch (error) {
     infoSection.innerHTML = `<p class="auth-error">${esc(error.message)}</p>`;
@@ -778,11 +812,11 @@ async function mostrarCalendario() {
 
 function renderCalendario() {
   if (vista !== "calendario" || !calendarioDatos) return;
-  const { grupos, desde } = calendarioDatos;
+  const { grupos, porDia, desde } = calendarioDatos;
   const hoy = fechaLocal(new Date());
 
   const porFecha = new Map();
-  for (const g of grupos) {
+  for (const g of porDia) {
     if (!porFecha.has(g.fechaLocal)) porFecha.set(g.fechaLocal, []);
     porFecha.get(g.fechaLocal).push(g);
   }
@@ -810,7 +844,7 @@ function renderCalendario() {
   const prefijoMes = `${anio}-${String(mes + 1).padStart(2, "0")}`;
   const diasDelMes = new Date(anio, mes + 1, 0).getDate();
   const huecos = (new Date(anio, mes, 1).getDay() + 6) % 7; // lunes primero
-  const completadosMes = grupos.filter((g) => g.completo && g.fechaLocal.startsWith(prefijoMes)).length;
+  const completadosMes = porDia.filter((g) => g.completo && g.fechaLocal.startsWith(prefijoMes)).length;
   const hoyDate = new Date();
   const esMesActual = anio === hoyDate.getFullYear() && mes === hoyDate.getMonth();
   const hayAnterior = `${prefijoMes}-01` > desde;
@@ -861,10 +895,13 @@ function renderCalendario() {
             ? `<ul>${elegidas
                 .map(
                   (g) => `<li class="${g.completo ? "completo" : ""}">
-                    <span>${g.complementario ? esc(g.diaNombre) : `Día ${g.diaNumero} · ${esc(g.diaNombre)}`}${
-                      g.complementario ? " <em>(complementario)</em>" : ""
-                    }${misRutinas.length > 1 ? ` <em>(${esc(g.rutina)})</em>` : ""}</span>
-                    <span>${g.marcados}/${g.totalDia}${g.completo ? ` ${icon("check", "cal-ok")}` : ""}</span>
+                    <div class="cal-detalle-fila">
+                      <span>${g.complementario ? esc(g.diaNombre) : `Día ${g.diaNumero} · ${esc(g.diaNombre)}`}${
+                        g.complementario ? " <em>(complementario)</em>" : ""
+                      }${misRutinas.length > 1 ? ` <em>(${esc(g.rutina)})</em>` : ""}</span>
+                      <span>${g.ejercicios.length}/${g.totalDia}${g.completo ? ` ${icon("check", "cal-ok")}` : ""}</span>
+                    </div>
+                    <ul class="cal-ejercicios">${g.ejercicios.map((nombre) => `<li>${esc(nombre)}</li>`).join("")}</ul>
                   </li>`
                 )
                 .join("")}</ul>`
@@ -893,7 +930,7 @@ function renderCalendario() {
       <button type="button" class="small cal-ver-mas" aria-expanded="${calendarioSemanasAbiertas}" aria-controls="calSemanas">
         ${calendarioSemanasAbiertas ? `${icon("chevron-up")} Ver menos` : `${icon("chevron-down")} Ver más`}
       </button>
-      <p class="footer-note" style="margin:10px 0 0;text-align:left">Un día cuenta como completado cuando marcás todos sus ejercicios.</p>
+      <p class="footer-note" style="margin:10px 0 0;text-align:left">Un día cuenta como completado cuando marcás todos sus ejercicios en la semana, aunque sea en varios días.</p>
     </div>
   `;
 
