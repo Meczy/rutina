@@ -22,6 +22,25 @@
   .nav-link{width:100%;justify-content:flex-start;border:none;border-radius:10px;padding:12px 14px}
   .nav-link.active{background:var(--soft);color:var(--accent2)}
 }
+/* Frase junto al logo: una sola línea; si no entra, se corta con "…". */
+/* En computadora va junto al logo, en cursiva y separada por una raya; en celular, a la derecha. */
+.topnav-frase{flex:1;min-width:0;margin-left:2px;padding-left:10px;border-left:1px solid var(--line);color:var(--muted);font-size:13px;font-weight:600;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:760px){.topnav-frase{margin-left:0;padding-left:0;border-left:0;font-style:normal;text-align:right}}
+.hero.hero-compacto{padding:18px}
+.hero.hero-compacto .install-btn{margin:0 0 12px}
+.hero.hero-compacto .stats{margin-top:0}
+/* Menú flotante de abajo: solo en celular, reemplaza a la hamburguesa. */
+.bottom-nav{display:none}
+@media(max-width:760px){
+  .hamburger,.nav-links{display:none!important}
+  .app{padding-bottom:calc(88px + env(safe-area-inset-bottom))}
+  .bottom-nav{display:flex;justify-content:space-around;position:fixed;z-index:100;left:0;right:0;bottom:0;padding:6px 6px calc(6px + env(safe-area-inset-bottom));background:var(--ink);border-radius:0;box-shadow:0 -4px 16px rgba(0,0,0,.14)}
+  .bottom-nav button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 2px;border:0;border-radius:16px;background:none;color:rgba(255,255,255,.62);font:inherit;font-size:10.5px;font-weight:700;cursor:pointer;transition:color .2s var(--ease),background .2s var(--ease),transform .15s var(--ease)}
+  .bottom-nav button:active{transform:scale(.94)}
+  .bottom-nav button.active{background:var(--accent);color:#fff}
+  .bottom-nav .icon{width:21px;height:21px}
+  .bottom-nav span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
 .hero{position:relative;overflow:hidden;color:#fff;border-radius:var(--radius-lg);padding:28px 22px;background:var(--hero);box-shadow:0 20px 50px var(--hero-sombra);margin-bottom:16px}
 .hero::before{content:"";position:absolute;inset:0;background:radial-gradient(120% 90% at 100% 0%,rgba(255,255,255,.18),transparent 55%);pointer-events:none}
 .hero h1{margin:0;font-size:clamp(30px,6vw,46px);letter-spacing:-.03em;text-shadow:0 2px 18px rgba(0,0,0,.15)}.hero p{margin:8px 0 0;color:rgba(255,255,255,.8)}
@@ -484,8 +503,12 @@ html[data-tema="carbon"]{--bg:#f4f4f5;--ink:#18181b;--muted:#63636b;--line:#e4e4
 .cal-punto.completo{background:var(--accent)}
 .cal-detalle{border-top:1px solid var(--line);padding-top:10px}
 .cal-detalle ul{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
-.cal-detalle li{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:10px;background:var(--tinte);font-size:14px}
-.cal-detalle li.completo{background:var(--chip-fondo);color:var(--accent2);font-weight:700}
+.cal-detalle li{padding:8px 10px;border-radius:10px;background:var(--tinte);font-size:14px}
+.cal-detalle-fila{display:flex;justify-content:space-between;gap:10px}
+.cal-detalle li.completo .cal-detalle-fila{color:var(--accent2);font-weight:700}
+.cal-detalle li.completo{background:var(--chip-fondo)}
+.cal-detalle .cal-ejercicios{list-style:disc;margin:6px 0 0;padding:0 0 0 18px;display:block;gap:0}
+.cal-detalle .cal-ejercicios li{padding:1px 0;background:none;border-radius:0;font-size:13px;color:var(--muted)}
 .cal-detalle li em{font-style:normal;color:var(--muted);font-weight:500}
 .cal-ok{width:16px;height:16px;vertical-align:-3px}
 .cal-semanas{display:flex;flex-direction:column;gap:8px;margin-top:10px}
